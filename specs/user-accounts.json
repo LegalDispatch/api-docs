@@ -1,0 +1,3056 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "User Account Service API",
+    "description": "Manages user accounts, invitations, server profiles, and authentication\r\nfor the LegalDispatch platform.\r\n\r\n## Authentication\r\nMost endpoints require a JWT token passed via the API Gateway. The gateway\r\nvalidates the token and forwards claims in the `X-User-Claims` header.\r\nInternal service-to-service calls use the `X-Internal-Token` header.\r\n\r\n## Error Responses\r\nAll errors follow a consistent JSON envelope:\r\n```json\r\n{ \"code\": \"ERROR_CODE\", \"message\": \"Human-readable message\", \"request_id\": \"...\" }\r\n```\r\n\r\n## Naming Convention\r\nAll JSON fields use **snake_case** naming.",
+    "contact": {
+      "name": "LegalDispatch Engineering",
+      "email": "engineering@legaldispatch.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns 200 OK if the process is running. Does **not** verify downstream dependencies — use `/ready` for that.",
+        "operationId": "Liveness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness probe",
+        "description": "Returns 200 OK when the primary database is reachable. Returns 503 Service Unavailable otherwise. Also reports connectivity to the read replica, Redis cache, and RabbitMQ event bus.",
+        "operationId": "Readiness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/register": {
+      "post": {
+        "tags": [
+          "Registration"
+        ],
+        "summary": "Register via invitation",
+        "description": "Completes an invitation-based registration by creating the user account, credentials in the Auth Service, and an email verification token. The invitation token is consumed and cannot be reused.",
+        "operationId": "Register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "410": {
+            "description": "Gone"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/register/server": {
+      "post": {
+        "tags": [
+          "Registration"
+        ],
+        "summary": "Register as process server",
+        "description": "Self-registration for independent process servers. No invitation required. Creates a user account with `role = process_server`, an empty server profile, and sends an email verification link.",
+        "operationId": "RegisterServer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/verify-email": {
+      "post": {
+        "tags": [
+          "Registration"
+        ],
+        "summary": "Verify email address",
+        "description": "Verifies a user's email using the one-time token sent to their inbox. Transitions the user status from `pending_verification` to `active`.",
+        "operationId": "VerifyEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "410": {
+            "description": "Gone"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Invite operations user",
+        "description": "Invites a new operations staff member to the caller's partner organization. Validates the role, checks seat limits, and ensures no duplicate pending invitation exists. For `client_user` role, a valid `client_id` must be provided.",
+        "operationId": "CreateInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "List partner invitations",
+        "description": "Returns all invitations for the caller's partner, optionally filtered by `status` (`pending`, `accepted`, `expired`, `revoked`). Includes the inviter's display name for each invitation.",
+        "operationId": "ListInvitations",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/server": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Invite process server",
+        "description": "Invites an independent process server to join the caller's partner network. Checks for existing active relationships and duplicate pending invitations.",
+        "operationId": "CreateServerInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServerInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/{id}": {
+      "delete": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Revoke pending invitation",
+        "description": "Revokes a pending invitation, preventing the recipient from registering. Only pending invitations belonging to the caller's partner can be revoked.",
+        "operationId": "RevokeInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeInvitationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/{id}/resend": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Resend invitation email",
+        "description": "Resends the invitation email for a pending invitation. Expired or already-accepted invitations cannot be resent.",
+        "operationId": "ResendInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendInvitationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "410": {
+            "description": "Gone"
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List partner users",
+        "description": "Returns a paginated list of all users belonging to the caller's partner organization. Supports optional filtering by `role`, `status`, and free-text `search` (matches name or email). Default page size is 20; maximum is 100.",
+        "operationId": "ListUsers",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user details",
+        "description": "Returns the full profile of a specific user within the caller's partner organization. Returns 404 if the user does not exist or belongs to a different partner.",
+        "operationId": "GetUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/role": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Change user role",
+        "description": "Changes the role of a user within the caller's partner organization. **Required Role:** `partner_admin` only. Guards: cannot change your own role; cannot remove the last `partner_admin`.",
+        "operationId": "ChangeUserRole",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRoleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/deactivate": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Deactivate user",
+        "description": "Deactivates a user account (soft delete). The user loses access immediately and all active sessions are invalidated. Data and order history are retained for audit. **Required Role:** `partner_admin` only.",
+        "operationId": "DeactivateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeactivateUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/reactivate": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reactivate user",
+        "description": "Reactivates a previously deactivated or suspended user account. Checks that reactivation would not exceed the partner's seat limit. **Required Role:** `partner_admin` only.",
+        "operationId": "ReactivateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactivateUserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get current user profile",
+        "description": "Returns the full profile of the currently authenticated user, including partner name, notification preferences, and account status. Any authenticated user can call this endpoint.",
+        "operationId": "GetMyProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update current user profile",
+        "description": "Updates the authenticated user's profile. Only provided (non-null) fields are changed. Updatable fields: `first_name`, `last_name`, `phone`, and `notification_preferences`. Email and role cannot be changed through this endpoint.",
+        "operationId": "UpdateMyProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/avatar": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Upload user avatar",
+        "description": "Upload a new avatar image for the current user. **Content-Type:** `multipart/form-data` with a `file` field. Accepted formats: JPEG, PNG, WebP. Maximum size: 5 MB.",
+        "operationId": "UploadAvatar",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/change-password": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Change own password",
+        "description": "Changes the authenticated user's password. Requires current password confirmation. The password change is delegated to the Auth Service, which verifies the current password before applying the update.",
+        "operationId": "ChangePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/server-profile": {
+      "get": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "Get current server profile",
+        "description": "Returns the authenticated process server's public marketplace profile, including certifications, service areas, work preferences, and aggregate stats. Only accessible to users with the `process_server` role.",
+        "operationId": "GetMyServerProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "Update current server profile",
+        "description": "Updates the authenticated process server's marketplace profile. Only provided (non-null) fields are applied. Updatable fields: `display_name`, `bio`, `base_rate`, `availability_status`, and `work_preferences`.",
+        "operationId": "UpdateMyServerProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServerProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/server-profile/service-areas": {
+      "put": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "Update service coverage areas",
+        "description": "Replaces all service coverage areas for the authenticated process server. Existing areas are deactivated and new areas are inserted atomically in a single transaction. Supported area types: `state`, `county`, `city`, `zip`, `radius`.",
+        "operationId": "UpdateMyServiceAreas",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceAreasRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateServiceAreasResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/partner-relationships": {
+      "get": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "List partner relationships",
+        "description": "Returns all partner relationships for the authenticated process server, including pending invitations, active partnerships, and terminated relationships. Partner names are resolved from the Partner Management Service.",
+        "operationId": "GetMyPartnerRelationships",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerRelationshipsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/partner-relationships/{relationshipId}/accept": {
+      "post": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "Accept a partner invitation",
+        "description": "Accepts a pending partner relationship invitation. Sets the agreed rate and activates the relationship, enabling the server to receive assignments from this partner. The relationship must be in `pending` status.",
+        "operationId": "AcceptPartnerRelationship",
+        "parameters": [
+          {
+            "name": "relationshipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptRelationshipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/partner-relationships/{relationshipId}/decline": {
+      "post": {
+        "tags": [
+          "Server Profiles"
+        ],
+        "summary": "Decline a partner invitation",
+        "description": "Declines a pending partner relationship invitation. Sets the relationship status to `declined`. The relationship must be in `pending` status.",
+        "operationId": "DeclinePartnerRelationship",
+        "parameters": [
+          {
+            "name": "relationshipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get user by ID",
+        "description": "Returns a lightweight user identity record. Called by SOP Service, Filing Service, Operations Service, and Webhook Service.",
+        "operationId": "InternalGetUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalUserResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/status": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Check user active status",
+        "description": "Lightweight status check for the API Gateway to verify a user is active before forwarding requests.",
+        "operationId": "InternalGetUserStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalUserStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/by-email/{email}": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Resolve user by email + partner",
+        "description": "Resolves a user identity during login when the partner context is known (e.g., custom domain login). **partner_id** is optional — omit for process servers and super admins.",
+        "operationId": "InternalGetUserByEmail",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partner_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalUserByEmailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/users/by-email/{email}": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Multi-account email resolution",
+        "description": "Resolves all accounts tied to an email across all partners. Returns `single_account` or `multiple_accounts` resolution for the login partner selector.",
+        "operationId": "InternalResolveEmailAccounts",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalEmailResolutionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/auth-context": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get auth context for JWT construction",
+        "description": "Returns the full role/partner context needed to build JWTs. Operations users receive a permission set; process servers receive a partner relationship list.",
+        "operationId": "InternalGetAuthContext",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalAuthContextResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/check-permission": {
+      "post": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Check user permission",
+        "description": "Validates a specific permission for a user in a partner context. Called by the API Gateway, SOP Service, and Filing Service.",
+        "operationId": "InternalCheckPermission",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckPermissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckPermissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/server-profile": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get server profile with location data",
+        "description": "Returns a process server's profile including **home_base_lat/lng** for distance calculations. These coordinates are internal-only and never exposed in public responses.",
+        "operationId": "InternalGetServerProfile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerProfileResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/users/servers/available": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Find available servers for assignment",
+        "description": "Returns servers with active relationships to the specified partner, sorted by coverage specificity, rating, then distance. Used by the Operations Service for the assignment view.",
+        "operationId": "InternalGetAvailableServers",
+        "parameters": [
+          {
+            "name": "partner_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "county",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalAvailableServersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/users/provision-partner-admin": {
+      "post": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Provision first partner admin",
+        "description": "Creates the first admin user and invitation during partner onboarding. Called by the Partner Management Service.",
+        "operationId": "InternalProvisionPartnerAdmin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionPartnerAdminRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvisionPartnerAdminResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/internal/users/by-partner/{partnerId}": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get partner user seat counts",
+        "description": "Returns active user counts and pending invitation counts for seat limit enforcement. Called by the Partner Management Service.",
+        "operationId": "InternalGetPartnerUserCount",
+        "parameters": [
+          {
+            "name": "partnerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalPartnerUserCountResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/record-login": {
+      "post": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Record user login",
+        "description": "Updates the user's last login timestamp and IP address. Called by the API Authentication Service after successful login.",
+        "operationId": "InternalRecordLogin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/notification-preferences": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get notification preferences",
+        "description": "Returns the user's preferred notification channels (email, SMS, push). Called by the Notification Service.",
+        "operationId": "InternalGetNotificationPreferences",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalNotificationPreferencesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/user/{id}/contact": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get user contact info",
+        "description": "Returns email, phone, and full name for outbound notifications. Called by the Notification Service.",
+        "operationId": "InternalGetContact",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalContactResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AcceptRelationshipRequest": {
+        "type": "object",
+        "properties": {
+          "agreed_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "coverage_areas_for_partner": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "AvatarUploadResponse": {
+        "type": "object",
+        "properties": {
+          "avatar_url": {
+            "type": "string"
+          }
+        }
+      },
+      "CertificationDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        }
+      },
+      "ChangePasswordResponse": {
+        "type": "object",
+        "properties": {
+          "password_changed": {
+            "type": "boolean"
+          },
+          "sessions_invalidated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChangeRoleRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ChangeRoleResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "previous_role": {
+            "type": "string"
+          },
+          "new_role": {
+            "type": "string"
+          },
+          "changed_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CheckPermissionRequest": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permission": {
+            "type": "string"
+          }
+        }
+      },
+      "CheckPermissionResponse": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "CreateServerInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "proposed_base_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "proposed_coverage_areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "DeactivateUserRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "reassign_open_orders_to": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "DeactivateUserResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "deactivated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sessions_invalidated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InternalAccountSummary": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "partner_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "InternalAuthContextResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "partner_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "partner_relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalPartnerRelationshipSummary"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "InternalAvailableServer": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "average_rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "availability_status": {
+            "type": "string"
+          },
+          "home_base_lat": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "home_base_lng": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "coverage_match": {
+            "type": "string",
+            "nullable": true
+          },
+          "relationship_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agreed_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "InternalAvailableServersResponse": {
+        "type": "object",
+        "properties": {
+          "servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalAvailableServer"
+            }
+          }
+        }
+      },
+      "InternalCertificationSummary": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InternalContactResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "full_name": {
+            "type": "string"
+          }
+        }
+      },
+      "InternalEmailResolutionResponse": {
+        "type": "object",
+        "properties": {
+          "resolution": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/InternalUserByEmailResponse2"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalAccountSummary"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "InternalNotificationPreferencesResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "boolean"
+          },
+          "sms": {
+            "type": "boolean"
+          },
+          "push": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InternalPartnerRelationshipSummary": {
+        "type": "object",
+        "properties": {
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relationship_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "InternalPartnerUserCountResponse": {
+        "type": "object",
+        "properties": {
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active_users": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pending_invitations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_seats_in_use": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "InternalServerProfileResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "average_rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "availability_status": {
+            "type": "string"
+          },
+          "response_time_avg_minutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "service_areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalServiceAreaSummary"
+            }
+          },
+          "home_base_zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "home_base_lat": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "home_base_lng": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InternalCertificationSummary"
+            }
+          }
+        }
+      },
+      "InternalServiceAreaSummary": {
+        "type": "object",
+        "properties": {
+          "area_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "radius_miles": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "center_zip": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "InternalUserByEmailResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "email_verified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InternalUserByEmailResponse2": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "email_verified": {
+            "type": "boolean"
+          }
+        },
+        "nullable": true
+      },
+      "InternalUserResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "InternalUserStatusResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InvitationListItem": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "invitation_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "invited_by_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InvitationListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationListItem"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        }
+      },
+      "InvitationResponse": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "invitation_type": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "invited_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MyProfileResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "partner_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "notification_preferences": {
+            "$ref": "#/components/schemas/NotificationPreferences"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "boolean"
+          },
+          "sms": {
+            "type": "boolean"
+          },
+          "push": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NotificationPreferences2": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "boolean"
+          },
+          "sms": {
+            "type": "boolean"
+          },
+          "push": {
+            "type": "boolean"
+          }
+        },
+        "nullable": true
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PartnerRelationshipsResponse": {
+        "type": "object",
+        "properties": {
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipDto"
+            }
+          }
+        }
+      },
+      "ProvisionPartnerAdminRequest": {
+        "type": "object",
+        "properties": {
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "send_invitation": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ProvisionPartnerAdminResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ReactivateUserResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reactivated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RecordLoginRequest": {
+        "type": "object",
+        "properties": {
+          "logged_in_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ip_address": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_agent": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "invitation_token": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "agreed_to_terms": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterServerRequest": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "agreed_to_terms": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RegisterServerResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "next_step": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RelationshipActionResponse": {
+        "type": "object",
+        "properties": {
+          "relationship_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "agreed_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "activated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "RelationshipDto": {
+        "type": "object",
+        "properties": {
+          "relationship_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "agreed_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "coverage_areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "total_orders": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "invitation_sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "proposed_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "ResendInvitationResponse": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resent_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RevokeInvitationResponse": {
+        "type": "object",
+        "properties": {
+          "invitation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ServerProfileResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CertificationDto"
+            }
+          },
+          "service_areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAreaDto"
+            }
+          },
+          "base_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "availability_status": {
+            "type": "string"
+          },
+          "work_preferences": {
+            "$ref": "#/components/schemas/WorkPreferencesDto"
+          },
+          "average_rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "total_orders_completed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "member_since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "response_time_avg_minutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "ServiceAreaDto": {
+        "type": "object",
+        "properties": {
+          "area_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "radius_miles": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "center_zip": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ServiceAreaInput": {
+        "type": "object",
+        "properties": {
+          "area_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "radius_miles": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "center_zip": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "notification_preferences": {
+            "$ref": "#/components/schemas/NotificationPreferences2"
+          }
+        }
+      },
+      "UpdateServerProfileRequest": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "base_rate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "availability_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "work_preferences": {
+            "$ref": "#/components/schemas/WorkPreferencesDto2"
+          }
+        }
+      },
+      "UpdateServiceAreasRequest": {
+        "type": "object",
+        "properties": {
+          "service_areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAreaInput"
+            }
+          }
+        }
+      },
+      "UpdateServiceAreasResponse": {
+        "type": "object",
+        "properties": {
+          "service_areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAreaDto"
+            }
+          }
+        }
+      },
+      "UserDetailResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "deactivated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deactivated_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_login_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "notification_email": {
+            "type": "boolean"
+          },
+          "notification_sms": {
+            "type": "boolean"
+          },
+          "notification_push": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserListItem": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "last_login_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserListItem"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        }
+      },
+      "VerifyEmailRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "VerifyEmailResponse": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "boolean"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "WorkPreferencesDto": {
+        "type": "object",
+        "properties": {
+          "accepts_rush": {
+            "type": "boolean"
+          },
+          "accepts_same_day": {
+            "type": "boolean"
+          },
+          "accepts_weekend": {
+            "type": "boolean"
+          },
+          "preferred_case_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "WorkPreferencesDto2": {
+        "type": "object",
+        "properties": {
+          "accepts_rush": {
+            "type": "boolean"
+          },
+          "accepts_same_day": {
+            "type": "boolean"
+          },
+          "accepts_weekend": {
+            "type": "boolean"
+          },
+          "preferred_case_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "nullable": true
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Liveness and readiness probes for orchestrators (Kubernetes, ECS)."
+    },
+    {
+      "name": "Registration",
+      "description": "User account creation and email verification."
+    },
+    {
+      "name": "Invitations",
+      "description": "Invite operations staff or process servers to join a partner."
+    },
+    {
+      "name": "Users",
+      "description": "User profile management, role changes, and deactivation."
+    },
+    {
+      "name": "Server Profiles",
+      "description": "Public marketplace profiles for process servers."
+    },
+    {
+      "name": "Internal",
+      "description": "Service-to-service endpoints protected by `X-Internal-Token`."
+    }
+  ]
+}

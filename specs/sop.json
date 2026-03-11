@@ -1,0 +1,1812 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "LegalDispatch Service of Process API",
+    "description": "Service of process business logic, compliance, and proof generation for the\nLegalDispatch platform. Manages order lifecycle, fee line items, party tracking,\npartner transfers, and proof of service generation.\n\n## Authentication Model\n- **Public endpoints** — `Authorization: Bearer <access_token>` (JWT from API Gateway)\n- **Internal endpoints** — `X-Internal-Token: <shared_secret>` (service-to-service only)\n\n## Response Format\nAll responses use **snake_case** JSON serialization. Error responses follow the\nstandard envelope: `{ \"code\": \"CODE\", \"message\": \"...\", \"details\": {...}, \"request_id\": \"...\" }`.",
+    "contact": {
+      "name": "LegalDispatch Engineering",
+      "email": "engineering@legaldispatch.io"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns **200 OK** if the process is running.\nDoes not verify downstream dependencies — use `/ready` for that.",
+        "operationId": "Liveness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness probe",
+        "description": "Checks all critical dependencies and returns **200** only when the primary\ndatabase is reachable.\n\n- **Cache** and **event bus** are reported but non-critical — the service\n  degrades gracefully if they are temporarily unavailable.\n- Each dependency check has a **5-second timeout** — a timed-out check\n  reports `\"timeout\"` instead of `\"disconnected\"`.\n- Returns **503** when a critical dependency is unreachable.",
+        "operationId": "Readiness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests": {
+      "get": {
+        "tags": [
+          "Service Requests"
+        ],
+        "summary": "List service requests",
+        "description": "Returns a paginated list of service requests for the authenticated user's partner.\nSupports filtering by **status**, free-text **search** (order number, case number),\nsorting, and pagination.\n\n### Query Parameters\n- `status` — filter by status (e.g., `draft`, `submitted`, `in_progress`)\n- `search` — free-text search across order number and case number\n- `sort_by` — column to sort by (default: `created_at`)\n- `sort_direction` — `asc` or `desc` (default: `desc`)\n- `page` — page number, 1-based (default: `1`)\n- `page_size` — items per page, 1–100 (default: `25`)",
+        "operationId": "ListServiceRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort_direction",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponseOfServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Service Requests"
+        ],
+        "summary": "Create a new service request",
+        "description": "Creates a new service request in **draft** status. The request may include\nparties and locations inline. Fee calculation is performed immediately via PMS.\n\nSet `client_id` to create an order on behalf of a client.",
+        "operationId": "CreateServiceRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}": {
+      "get": {
+        "tags": [
+          "Service Requests"
+        ],
+        "summary": "Get service request details",
+        "description": "Returns a single service request with full details including parties,\nlocations, fee line items, and attempt summaries.",
+        "operationId": "GetServiceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/submit": {
+      "post": {
+        "tags": [
+          "Submission"
+        ],
+        "summary": "Submit a draft service request",
+        "description": "Submits a **draft** service request. This triggers:\n1. Completeness validation (parties, locations, documents)\n2. Payment hold placement via Payment Service\n3. Work order creation in Operations Service\n4. Status transition to `submitted` (or `fee_review` if partner requires)\n\nThe `payment_method_id` identifies the payment source for the hold.",
+        "operationId": "SubmitServiceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitServiceRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "Payment Required"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Service Requests"
+        ],
+        "summary": "Cancel a service request",
+        "description": "Cancels a service request. Only allowed for orders in a pre-`in_progress` status\n(`draft`, `fee_review`, `submitted`, `assigned`).\n\nCancellation releases any payment hold and cancels the Operations work order if one exists.",
+        "operationId": "CancelServiceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelServiceRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/transfer": {
+      "post": {
+        "tags": [
+          "Transfers"
+        ],
+        "summary": "Initiate a partner transfer",
+        "description": "Initiates a transfer of the service request to another partner.\nThe target partner's acceptance is checked via PMS before the transfer is created.\n\nOnly allowed for orders in `submitted` status. The order transitions to `pending_transfer`\nuntil the target partner accepts or rejects.",
+        "operationId": "InitiateTransfer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateTransferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/accept-transfer": {
+      "post": {
+        "tags": [
+          "Transfers"
+        ],
+        "summary": "Accept or reject a transfer",
+        "description": "The receiving partner accepts or rejects a pending transfer.\n\n- **Accept**: Order ownership transfers, fees are recalculated, and the work order\n  is re-created under the new partner.\n- **Reject**: The transfer is cancelled, the order reverts to `submitted` status\n  under the original partner, and a refund is issued.\n\nThe `decision` field must be `accept` or `reject`. When rejecting,\n`rejection_reason` should be provided.",
+        "operationId": "AcceptOrRejectTransfer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTransferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/additional-fees": {
+      "post": {
+        "tags": [
+          "Fees"
+        ],
+        "summary": "Add an additional fee",
+        "description": "Adds an additional fee to a service request that is in `submitted`, `assigned`,\n`dispatched`, or `in_progress` status.\n\nIf `charge_immediately` is `true`, the fee is charged via Payment Service immediately.\nOtherwise, the fee is tracked and charged upon order completion.\n\nFee types: `mileage`, `wait_time`, `rush`, `after_hours`, `stakeout`, `skip_trace`, `other`.",
+        "operationId": "AddAdditionalFee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAdditionalFeeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdditionalFeeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/approve-fees": {
+      "post": {
+        "tags": [
+          "Fees"
+        ],
+        "summary": "Approve or adjust fees",
+        "description": "Approves or adjusts the fee line items for a service request in `fee_review` status.\n\n### Actions\n- `approve` — accept all fees as-is and proceed to submission\n- `adjust` — modify specific fee line item amounts before approval\n\nWhen adjusting, provide an `adjustments` array with fee line item IDs and new amounts.\nThe estimated fee is recalculated from the adjusted line items.\nAfter approval, the order transitions to `submitted`.",
+        "operationId": "ApproveFees",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeApprovalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/assign": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Assign a process server",
+        "description": "Requests assignment of a process server to the service request.\nDelegates to Operations Service, which will send a callback when the assignment is confirmed.\n\nOnly allowed for orders in `submitted` status.",
+        "operationId": "AssignServer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignServerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/dispatch": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Dispatch order to server",
+        "description": "Requests dispatch of the work order to the assigned process server.\nDelegates to Operations Service, which will send a callback when dispatch is confirmed.\n\nOptional `dispatch_method`: `email`, `app`, `sms` (default: `app`).\nOnly allowed for orders in `assigned` status.",
+        "operationId": "DispatchOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/batch/{batchId}/assign": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Bulk assign server to batch orders",
+        "description": "Assigns a process server to multiple service requests from a batch import.\nEach order is assigned individually — partial success is possible.\n\nReturns the count of successful assignments and any errors per order.",
+        "operationId": "BulkAssign",
+        "parameters": [
+          {
+            "name": "batchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/operations-notes": {
+      "put": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Update operations notes",
+        "description": "Updates the internal operations notes on a service request.\nThese notes are visible only to operations staff and are not included in client-facing views.",
+        "operationId": "UpdateOperationsNotes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOperationsNotesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/{id}/locations": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Add a service location to a party",
+        "description": "Adds a new service location to an existing party within the service request.\nThe location is added with the specified priority and marked as active.\n\nThis endpoint is used when operations discovers an additional address for a party\nafter the order has been created.",
+        "operationId": "AddLocation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddLocationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/batch": {
+      "post": {
+        "tags": [
+          "Batch"
+        ],
+        "summary": "Batch create service requests from CSV",
+        "description": "Accepts a parsed CSV batch import and creates one service request per valid row.\nInvalid rows are tracked as errors on the batch record.\n\nThe request body contains the file metadata and parsed row data. The actual CSV file\nshould be uploaded to Document Management first, and the `file_id` provided here.\n\nReturns the batch import record with progress statistics.",
+        "operationId": "BatchImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchImportFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/service-requests/batch/{batchId}": {
+      "get": {
+        "tags": [
+          "Batch"
+        ],
+        "summary": "Get batch import status",
+        "description": "Returns the current status and progress of a batch import,\nincluding total rows, successful imports, failed imports, and error details.",
+        "operationId": "GetBatchStatus",
+        "parameters": [
+          {
+            "name": "batchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/internal/create-from-filing": {
+      "post": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Auto-create service request from filing",
+        "description": "Called by **Filing Service** to automatically create a service request\nwhen a court filing requires service of process.\n\nThe request contains all data needed to create the order, including parties\nand locations. The order is created in `draft` status with `entry_method` set\nto `filing`.",
+        "operationId": "CreateFromFiling",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFromFilingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/internal/service-requests/{id}": {
+      "get": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Get enriched service request (internal)",
+        "description": "Returns a fully enriched service request for the **Webhook Service** to include\nin outbound webhook payloads. Not partner-scoped — uses internal authentication only.",
+        "operationId": "GetServiceRequestInternal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AcceptTransferRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "rejection_reason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AddAdditionalFeeRequest": {
+        "type": "object",
+        "properties": {
+          "fee_type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "charge_immediately": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdditionalFeeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fee_type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "is_charged": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "additional_fees_total": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "AddLocationRequest": {
+        "type": "object",
+        "properties": {
+          "party_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "address1": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "county": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "AssignServerRequest": {
+        "type": "object",
+        "properties": {
+          "server_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AttemptSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "party_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "location_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "result": {
+            "type": "string"
+          },
+          "base_result": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "has_photos": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BatchImportFileRequest": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "file_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_rows": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BatchImportResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_rows": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "successful_imports": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed_imports": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "success_rate": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "BulkAssignRequest": {
+        "type": "object",
+        "properties": {
+          "server_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_request_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "CancelServiceRequestRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateFromFilingRequest": {
+        "type": "object",
+        "properties": {
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "court_id": {
+            "type": "string"
+          },
+          "case_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "service_type": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string",
+            "nullable": true
+          },
+          "hearing_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "service_deadline": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "filing_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilingParty"
+            }
+          }
+        }
+      },
+      "CreateLocationRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "address1": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "county": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CreatePartyRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "party_type": {
+            "type": "string"
+          },
+          "contact_phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateLocationRequest"
+            }
+          }
+        }
+      },
+      "CreateServiceRequestRequest": {
+        "type": "object",
+        "properties": {
+          "court_id": {
+            "type": "string"
+          },
+          "case_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "service_type": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          },
+          "hearing_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "hearing_location": {
+            "type": "string",
+            "nullable": true
+          },
+          "special_instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "service_deadline": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "payment_method_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatePartyRequest"
+            }
+          }
+        }
+      },
+      "DispatchOrderRequest": {
+        "type": "object",
+        "properties": {
+          "dispatch_method": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "FeeAdjustment": {
+        "type": "object",
+        "properties": {
+          "fee_line_item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "new_amount": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "FeeApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeAdjustment"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "FeeApprovalResponse": {
+        "type": "object",
+        "properties": {
+          "estimated_fee": {
+            "type": "number",
+            "format": "double"
+          },
+          "adjusted_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fee_line_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeLineItemResponse"
+            }
+          }
+        }
+      },
+      "FeeLineItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fee_type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "source": {
+            "type": "string"
+          },
+          "original_amount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "is_adjusted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FilingLocation": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "address1": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "FilingParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "party_type": {
+            "type": "string"
+          },
+          "contact_phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilingLocation"
+            }
+          }
+        }
+      },
+      "InitiateTransferRequest": {
+        "type": "object",
+        "properties": {
+          "to_partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "transfer_notes": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "LocationResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "address1": {
+            "type": "string"
+          },
+          "address2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zip": {
+            "type": "string"
+          },
+          "county": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedResponseOfServiceRequestResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRequestResponse"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PartyResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "party_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "contact_phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LocationResponse"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ServiceRequestResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_number": {
+            "type": "string"
+          },
+          "partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "court_id": {
+            "type": "string"
+          },
+          "case_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "service_type": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          },
+          "estimated_fee": {
+            "type": "number",
+            "format": "double"
+          },
+          "actual_fee": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "additional_fees_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "entry_method": {
+            "type": "string"
+          },
+          "fee_review_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "assigned_server_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "assigned_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dispatched_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "service_deadline": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "hearing_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "hearing_location": {
+            "type": "string",
+            "nullable": true
+          },
+          "special_instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "completed_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_on_behalf": {
+            "type": "boolean"
+          },
+          "client_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartyResponse"
+            }
+          },
+          "fee_line_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeeLineItemResponse"
+            }
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttemptSummaryResponse"
+            }
+          }
+        }
+      },
+      "SubmitServiceRequestRequest": {
+        "type": "object",
+        "properties": {
+          "payment_method_id": {
+            "type": "string"
+          }
+        }
+      },
+      "TransferResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from_partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to_partner_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "transfer_fee": {
+            "type": "number",
+            "format": "double"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transfer_notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UpdateOperationsNotesRequest": {
+        "type": "object",
+        "properties": {
+          "operations_notes": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Liveness and readiness probes"
+    },
+    {
+      "name": "Service Requests",
+      "description": "Order creation, listing, detail retrieval, and lifecycle operations"
+    },
+    {
+      "name": "Submission",
+      "description": "Order submission and fee review workflow"
+    },
+    {
+      "name": "Batch",
+      "description": "CSV batch import and status tracking"
+    },
+    {
+      "name": "Transfers",
+      "description": "Partner-to-partner order transfers"
+    },
+    {
+      "name": "Fees",
+      "description": "Additional fees and fee approval"
+    },
+    {
+      "name": "Operations",
+      "description": "Operations-facing endpoints (assign, dispatch, notes)"
+    },
+    {
+      "name": "Internal",
+      "description": "Service-to-service callback and provider endpoints (not exposed via API Gateway)"
+    }
+  ]
+}

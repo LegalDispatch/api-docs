@@ -1,0 +1,3012 @@
+openapi: 3.1.0
+info:
+  title: Partner Management Service API
+  version: '1.0'
+  description: |
+    Manages partner organizations, pricing rules, custom statuses, transfer settings,
+    and client management for the LegalDispatch platform.
+
+    ## Authentication
+    - **Admin routes** (`/admin/v1/*`) — Require `super_admin` role via JWT.
+    - **Partner routes** (`/api/v1/*`) — Require `partner_admin` role via JWT.
+    - **Internal routes** (`/internal/*`) — Require a shared service token (`X-Internal-Token` header).
+
+    ## File structure
+    This spec is split across multiple files for maintainability:
+    - `paths-*.yaml`  — Route definitions by domain area
+    - `schemas.yaml`  — All request/response/model schemas
+    - `parameters.yaml` — Shared path parameters and security schemes
+servers:
+  - url: http://localhost:8090
+    description: Local development
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Admin
+    description: Super-admin partner management
+  - name: Partner
+    description: Partner self-service (pricing, statuses, settings)
+  - name: Clients
+    description: Client management (CRUD, pricing overrides)
+  - name: Internal
+    description: Service-to-service endpoints (authenticated via shared token)
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Liveness check
+      description: Returns 200 if the process is running. Used by Kubernetes liveness probes.
+      operationId: health
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  go_version:
+                    type: string
+                    example: go1.24.0
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness check
+      description: Checks all dependencies (database, read replica, cache, event bus) and returns 200 if all are healthy, 503 if any are unhealthy.
+      operationId: ready
+      responses:
+        '200':
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: One or more dependencies unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /admin/v1/partners:
+    post:
+      tags:
+        - Admin
+      summary: Create a new partner
+      description: Creates a new partner organization and initialises its onboarding checklist.
+      operationId: createPartner
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePartnerRequest'
+      responses:
+        '201':
+          description: Partner created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePartnerResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid partner type or subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /admin/v1/partners/{partnerID}/status:
+    patch:
+      tags:
+        - Admin
+      summary: Update partner status
+      description: Transitions a partner to a new lifecycle status with an audit reason.
+      operationId: updatePartnerStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateStatusResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /admin/v1/partners/{partnerID}/plan:
+    put:
+      tags:
+        - Admin
+      summary: Update partner subscription plan
+      description: Changes a partner's subscription plan and adjusts feature flags and rate limits accordingly.
+      operationId: updatePartnerPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePartnerPlanRequest'
+      responses:
+        '200':
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePlanResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me:
+    get:
+      tags:
+        - Partner
+      summary: Get current partner profile
+      description: Returns the full profile of the authenticated partner.
+      operationId: getMyPartner
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Partner details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Partner'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Partner account suspended or terminated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/sop-pricing:
+    get:
+      tags:
+        - Partner
+      summary: Get SOP pricing
+      description: Returns the partner's current service of process pricing configuration.
+      operationId: getSOPPricing
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SOP pricing configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOPPricing'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Partner account suspended or terminated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Partner
+      summary: Update SOP pricing
+      description: Updates the partner's service of process pricing configuration.
+      operationId: updateSOPPricing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSOPPricingRequest'
+      responses:
+        '200':
+          description: Pricing updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOPPricing'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Partner account suspended or terminated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/sop-location-rules:
+    post:
+      tags:
+        - Partner
+      summary: Create a location-based pricing rule
+      description: Creates a location-specific SOP pricing override rule for the partner.
+      operationId: createLocationRule
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRuleRequest'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOPLocationRule'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: A pricing rule for this location already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/custom-statuses:
+    post:
+      tags:
+        - Partner
+      summary: Create a custom attempt status
+      description: Creates a partner-specific custom attempt result code with base status mapping.
+      operationId: createCustomStatus
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomStatusRequest'
+      responses:
+        '201':
+          description: Status created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomStatus'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Result code already exists for this partner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid base status or partner type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/transfer-settings:
+    put:
+      tags:
+        - Partner
+      summary: Update transfer settings
+      description: Updates the partner's inbound transfer acceptance configuration.
+      operationId: updateTransferSettings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransferSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferSettings'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Partner account suspended or terminated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/clients:
+    post:
+      tags:
+        - Clients
+      summary: Create a client
+      description: Creates a new client organization under the authenticated partner.
+      operationId: createClient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClientResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Account number or email conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid client type or billing method
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Clients
+      summary: List clients
+      description: Returns all clients belonging to the authenticated partner, optionally filtered by status.
+      operationId: listClients
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter clients by status.
+          schema:
+            type: string
+            enum:
+              - active
+              - inactive
+              - suspended
+      responses:
+        '200':
+          description: Client list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientListResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/clients/{clientID}:
+    get:
+      tags:
+        - Clients
+      summary: Get client details
+      description: Returns detailed client information including optional pricing overrides.
+      operationId: getClient
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      responses:
+        '200':
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientDetailResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Clients
+      summary: Update a client
+      description: Updates client fields. Only provided fields are changed.
+      operationId: updateClient
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+      responses:
+        '200':
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Account number or email conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/clients/{clientID}/status:
+    patch:
+      tags:
+        - Clients
+      summary: Update client status
+      description: Transitions a client to a new status.
+      operationId: updateClientStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/partners/me/clients/{clientID}/pricing:
+    get:
+      tags:
+        - Clients
+      summary: Get client pricing overrides
+      description: Returns the client-specific pricing overrides. Null fields mean partner defaults are used.
+      operationId: getClientPricing
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      responses:
+        '200':
+          description: Client pricing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPricing'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Clients
+      summary: Upsert client pricing overrides
+      description: Creates or updates client-specific pricing overrides. Null fields revert to partner defaults.
+      operationId: upsertClientPricing
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertClientPricingRequest'
+      responses:
+        '200':
+          description: Pricing saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPricing'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Clients
+      summary: Delete client pricing overrides (revert to partner defaults)
+      description: Removes all client-specific pricing overrides. The client will use partner-level defaults.
+      operationId: deleteClientPricing
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/clientID'
+      responses:
+        '200':
+          description: Pricing deleted (reverted to partner defaults)
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}:
+    get:
+      tags:
+        - Internal
+      summary: Get partner by ID
+      description: Returns the full partner record for service-to-service lookups.
+      operationId: getPartnerByID
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      responses:
+        '200':
+          description: Partner details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Partner'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}/settings:
+    get:
+      tags:
+        - Internal
+      summary: Get partner settings (composite view)
+      description: Returns the composite settings view consumed by other services (SOP, Filing, Gateway) on every request to determine partner capabilities and configuration.
+      operationId: getPartnerSettings
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      responses:
+        '200':
+          description: Partner settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerSettings'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}/branding:
+    get:
+      tags:
+        - Internal
+      summary: Get partner branding
+      description: Returns white-label branding configuration for the partner's portal.
+      operationId: getPartnerBranding
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      responses:
+        '200':
+          description: Branding details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBranding'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/by-domain/{domain}:
+    get:
+      tags:
+        - Internal
+      summary: Look up partner by custom domain
+      description: Resolves a custom portal domain to the owning partner.
+      operationId: getPartnerByDomain
+      security:
+        - internalToken: []
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          description: Custom portal domain to look up.
+          schema:
+            type: string
+            example: serve.acmelegal.com
+      responses:
+        '200':
+          description: Partner details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Partner'
+        '404':
+          description: No partner found for domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/custom-attempt-statuses/{partnerID}:
+    get:
+      tags:
+        - Internal
+      summary: Get custom attempt statuses for a partner
+      description: Returns all custom attempt statuses defined by the partner.
+      operationId: getCustomAttemptStatuses
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      responses:
+        '200':
+          description: Custom statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustomStatus'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/calculate-service-fee:
+    post:
+      tags:
+        - Internal
+      summary: Calculate SOP service fee
+      description: Calculates the total service of process fee for a given partner, location, urgency, party count, and optional client. Applies pricing strategy, location rules, and client overrides when available.
+      operationId: calculateServiceFee
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeRequest'
+      responses:
+        '200':
+          description: Fee calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeResult'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/resolve-attempt-status:
+    post:
+      tags:
+        - Internal
+      summary: Resolve attempt status using partner's custom mappings
+      description: Looks up a result code against the partner's custom status mappings. Falls back to base statuses if no custom mapping exists.
+      operationId: resolveAttemptStatus
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveStatusRequest'
+      responses:
+        '200':
+          description: Resolved status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResolution'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/check-transfer-acceptance:
+    post:
+      tags:
+        - Internal
+      summary: Check if a partner will accept a transfer
+      description: Evaluates transfer settings, blacklists, auto-accept rules, and daily limits to determine if the receiving partner will accept a transfer.
+      operationId: checkTransferAcceptance
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferCheckRequest'
+      responses:
+        '200':
+          description: Transfer check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferCheckResult'
+        '403':
+          description: Sending partner is blacklisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/calculate-filing-fee:
+    post:
+      tags:
+        - Internal
+      summary: Calculate filing fee
+      description: Calculates the total filing fee including the partner's markup. Applies court-specific overrides when available.
+      operationId: calculateFilingFee
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilingFeeRequest'
+      responses:
+        '200':
+          description: Fee calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilingFeeResult'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/check-fee-waiver-eligibility:
+    post:
+      tags:
+        - Internal
+      summary: Check fee waiver eligibility
+      description: Determines if a filer is eligible for a court fee waiver based on partner and filer configuration.
+      operationId: checkFeeWaiverEligibility
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeWaiverCheckRequest'
+      responses:
+        '200':
+          description: Eligibility result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeWaiverCheckResult'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/check-plan-limit:
+    post:
+      tags:
+        - Internal
+      summary: Check if partner has reached plan limits
+      description: Checks whether the partner's current usage for a resource is within their plan limits.
+      operationId: checkPlanLimit
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanLimitCheckRequest'
+      responses:
+        '200':
+          description: Plan limit result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanLimitCheckResult'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Plan limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}/rate-limits:
+    get:
+      tags:
+        - Internal
+      summary: Get rate limits for a partner
+      description: Returns the rate limiting configuration based on the partner's subscription plan.
+      operationId: getRateLimits
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+      responses:
+        '200':
+          description: Rate limit configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitConfig'
+        '404':
+          description: Partner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}/client/{clientID}:
+    get:
+      tags:
+        - Internal
+      summary: Get client by ID (internal)
+      description: Returns a client record for service-to-service lookups.
+      operationId: getClientByIDInternal
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+        - $ref: '#/components/parameters/clientID'
+      responses:
+        '200':
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/partner/{partnerID}/client/{clientID}/pricing:
+    get:
+      tags:
+        - Internal
+      summary: Get client pricing (internal)
+      description: Returns client-specific pricing overrides for fee calculation.
+      operationId: getClientPricingInternal
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/partnerID'
+        - $ref: '#/components/parameters/clientID'
+      responses:
+        '200':
+          description: Client pricing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientPricing'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+  parameters:
+    partnerID:
+      name: partnerID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    clientID:
+      name: clientID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ErrorResponse:
+      type: object
+      description: Standard error response returned by all endpoints on failure.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (e.g. VALIDATION_ERROR, PARTNER_NOT_FOUND).
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Human-readable error description.
+          example: Request validation failed
+    CreatePartnerRequest:
+      type: object
+      description: Request body for creating a new partner organization.
+      required:
+        - legal_name
+        - partner_type
+        - contact
+        - address
+        - subscription_plan
+      properties:
+        legal_name:
+          type: string
+          description: Official legal name of the partner organization.
+          example: Acme Process Serving LLC
+        trade_name:
+          type:
+            - string
+            - 'null'
+          description: Doing-business-as (DBA) name, if different from legal name.
+          example: Acme Legal Services
+        partner_type:
+          type: string
+          description: Type of partner organization.
+          enum:
+            - law_firm
+            - process_serving_company
+          example: process_serving_company
+        contact:
+          $ref: '#/components/schemas/ContactInfo'
+        address:
+          $ref: '#/components/schemas/AddressInfo'
+        ein:
+          type:
+            - string
+            - 'null'
+          description: Employer Identification Number.
+          example: 12-3456789
+        state_bar_number:
+          type:
+            - string
+            - 'null'
+          description: State bar registration number (for law firms).
+          example: SBN-123456
+        subscription_plan:
+          type: string
+          description: Initial subscription plan.
+          enum:
+            - starter
+            - professional
+            - enterprise
+          example: professional
+    UpdateStatusRequest:
+      type: object
+      description: Request body for updating a partner's lifecycle status.
+      required:
+        - status
+        - reason
+      properties:
+        status:
+          type: string
+          description: Target lifecycle status.
+          enum:
+            - pending_setup
+            - trial
+            - active
+            - suspended
+            - terminated
+          example: active
+        reason:
+          type: string
+          description: Reason for the status change (stored in audit log).
+          example: Completed onboarding and billing setup
+    UpdatePartnerPlanRequest:
+      type: object
+      description: Request body for updating a partner's subscription plan.
+      required:
+        - subscription_plan
+      properties:
+        subscription_plan:
+          type: string
+          description: New subscription plan.
+          enum:
+            - starter
+            - professional
+            - enterprise
+          example: enterprise
+    UpdateSOPPricingRequest:
+      type: object
+      description: Request body for updating SOP (Service of Process) pricing configuration including strategy selection.
+      required:
+        - national_base_fee
+        - national_mileage_rate
+        - rush_premium
+        - same_day_premium
+        - emergency_premium
+        - transfer_acceptance_fee
+        - pricing_strategy
+        - coverage_mode
+        - urgency_premium_mode
+      properties:
+        pricing_strategy:
+          type: string
+          description: Which pricing calculation model to use.
+          enum:
+            - flat_per_location
+            - flat_plus_mileage
+            - per_party
+            - tiered_flat
+          default: flat_per_location
+          example: flat_per_location
+        coverage_mode:
+          type: string
+          description: Whether to serve all locations or only those with explicit rules.
+          enum:
+            - national
+            - location_rules_only
+          default: national
+          example: national
+        national_base_fee:
+          type: number
+          format: double
+          description: Default base fee for standard service of process.
+          example: 75
+        national_mileage_rate:
+          type: number
+          format: double
+          description: Per-mile rate for distance-based surcharge.
+          example: 0.65
+        rush_premium:
+          type: number
+          format: double
+          description: Additional fee for rush service (1-3 day).
+          example: 25
+        same_day_premium:
+          type: number
+          format: double
+          description: Additional fee for same-day service.
+          example: 50
+        emergency_premium:
+          type: number
+          format: double
+          description: Additional fee for emergency/after-hours service.
+          example: 100
+        transfer_acceptance_fee:
+          type: number
+          format: double
+          description: Fee charged when accepting a transfer from another partner.
+          example: 15
+        reference_latitude:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Latitude of partner's mileage reference point. Required for flat_plus_mileage strategy.
+          example: 34.0522
+        reference_longitude:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Longitude of partner's mileage reference point. Required for flat_plus_mileage strategy.
+          example: -118.2437
+        included_miles:
+          type: number
+          format: double
+          description: Miles included in base fee before mileage charges apply.
+          default: 0
+          example: 15
+        urgency_premium_mode:
+          type: string
+          description: Whether urgency premium is charged per-order or per-party.
+          enum:
+            - per_order
+            - per_party
+          default: per_order
+          example: per_order
+    CreateLocationRuleRequest:
+      type: object
+      description: Request body for creating a location-specific SOP pricing rule.
+      required:
+        - scope
+        - scope_value
+        - state
+        - base_fee
+      properties:
+        scope:
+          type: string
+          description: Geographic scope level of the rule.
+          enum:
+            - state
+            - county
+            - city
+            - zip
+          example: county
+        scope_value:
+          type: string
+          description: Value matching the scope (e.g. county name, zip code).
+          example: Los Angeles
+        state:
+          type: string
+          description: Two-letter US state code.
+          example: CA
+        base_fee:
+          type: number
+          format: double
+          description: Base fee override for this location.
+          example: 95
+        mileage_rate:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Mileage rate override for this location. Null means use default.
+          example: 0.75
+        per_party_rate:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Per-party rate for this location. Used by per_party strategy.
+          example: 55
+        tier_label:
+          type:
+            - string
+            - 'null'
+          description: Pricing tier display name (e.g. "Metro", "Suburban"). Used by tiered_flat strategy.
+          example: Metro
+        description:
+          type:
+            - string
+            - 'null'
+          description: Human-readable note about why this rule exists.
+          example: Higher fee for LA County due to traffic conditions
+    CreateCustomStatusRequest:
+      type: object
+      description: Request body for creating a partner-specific custom attempt status.
+      required:
+        - result_code
+        - display_label
+        - maps_to_base
+        - next_party_status
+      properties:
+        result_code:
+          type: string
+          description: Unique machine-readable code for this status.
+          example: LEFT_WITH_COWORKER
+        display_label:
+          type: string
+          description: Human-readable label shown in the UI.
+          example: Left with Co-Worker
+        maps_to_base:
+          type: string
+          description: Base system status this custom status maps to.
+          example: served
+        next_party_status:
+          type: string
+          description: Status the serving party transitions to after this result.
+          example: completed
+        requires_follow_up:
+          type: boolean
+          description: Whether this status triggers a follow-up action.
+          default: false
+          example: false
+        description:
+          type:
+            - string
+            - 'null'
+          description: Optional explanation of when to use this status.
+    UpdateTransferSettingsRequest:
+      type: object
+      description: Request body for updating inbound transfer acceptance settings.
+      properties:
+        accepts_inbound:
+          type: boolean
+          description: Whether this partner accepts inbound transfers.
+          example: true
+        transfer_acceptance_fee:
+          type: number
+          format: double
+          description: Fee charged per accepted transfer.
+          example: 15
+        max_inbound_per_day:
+          type:
+            - integer
+            - 'null'
+          description: Maximum inbound transfers per day. Null means unlimited.
+          example: 50
+    CreateClientRequest:
+      type: object
+      description: Request body for creating a new client under the partner.
+      required:
+        - legal_name
+        - client_type
+        - billing_method
+        - contact
+        - address
+      properties:
+        legal_name:
+          type: string
+          description: Official legal name of the client organization.
+          example: Smith & Associates LLP
+        trade_name:
+          type:
+            - string
+            - 'null'
+          description: DBA name, if different from legal name.
+        client_type:
+          type: string
+          description: Type of client organization.
+          enum:
+            - law_firm
+            - attorney
+            - corporation
+            - individual
+            - government_agency
+          example: law_firm
+        billing_method:
+          type: string
+          description: How the client is billed.
+          enum:
+            - invoice
+            - prepaid
+            - credit_card
+          example: invoice
+        account_number:
+          type:
+            - string
+            - 'null'
+          description: Partner-assigned account number for reference.
+          example: ACCT-001
+        payment_terms_days:
+          type:
+            - integer
+            - 'null'
+          description: Net payment terms in days.
+          example: 30
+        credit_limit:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Maximum credit allowed for invoice billing.
+          example: 5000
+        tax_id:
+          type:
+            - string
+            - 'null'
+          description: Client's tax identification number.
+        notes:
+          type:
+            - string
+            - 'null'
+          description: Internal notes about the client.
+        contact:
+          $ref: '#/components/schemas/ContactInfo'
+        address:
+          $ref: '#/components/schemas/AddressInfo'
+    UpdateClientRequest:
+      type: object
+      description: Request body for updating an existing client. All fields are optional — only provided fields are updated.
+      properties:
+        legal_name:
+          type:
+            - string
+            - 'null'
+          description: Updated legal name.
+        trade_name:
+          type:
+            - string
+            - 'null'
+          description: Updated DBA name.
+        client_type:
+          type:
+            - string
+            - 'null'
+          description: Updated client type.
+          enum:
+            - law_firm
+            - attorney
+            - corporation
+            - individual
+            - government_agency
+        account_number:
+          type:
+            - string
+            - 'null'
+          description: Updated account number.
+        billing_method:
+          type:
+            - string
+            - 'null'
+          description: Updated billing method.
+          enum:
+            - invoice
+            - prepaid
+            - credit_card
+        payment_terms_days:
+          type:
+            - integer
+            - 'null'
+          description: Updated payment terms.
+        credit_limit:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Updated credit limit.
+        tax_id:
+          type:
+            - string
+            - 'null'
+          description: Updated tax ID.
+        contact:
+          $ref: '#/components/schemas/ContactInfo'
+        address:
+          $ref: '#/components/schemas/AddressInfo'
+        notes:
+          type:
+            - string
+            - 'null'
+          description: Updated internal notes.
+    UpdateClientStatusRequest:
+      type: object
+      description: Request body for changing a client's status.
+      required:
+        - status
+        - reason
+      properties:
+        status:
+          type: string
+          description: Target client status.
+          enum:
+            - active
+            - inactive
+            - suspended
+          example: inactive
+        reason:
+          type: string
+          description: Reason for the status change.
+          example: Client requested account deactivation
+    UpsertClientPricingRequest:
+      type: object
+      description: Request body for creating or updating client-specific pricing overrides. Null fields mean "use the partner default" — this allows partial overrides.
+      properties:
+        sop_base_fee_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for SOP base fee. Null reverts to partner default.
+          example: 65
+        sop_mileage_rate_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for SOP mileage rate.
+        sop_rush_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for rush premium.
+        sop_same_day_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for same-day premium.
+        sop_emergency_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for emergency premium.
+        sop_per_party_rate_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for per-party rate (per_party strategy only).
+        filing_markup_type_override:
+          type:
+            - string
+            - 'null'
+          description: Override filing markup type (flat or percentage).
+          enum:
+            - flat
+            - percentage
+        filing_markup_value_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override filing markup amount.
+        waive_service_fees:
+          type:
+            - boolean
+            - 'null'
+          description: Whether to waive all service fees for this client.
+        discount_percentage:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Global discount percentage applied to all fees.
+          example: 10
+        notes:
+          type:
+            - string
+            - 'null'
+          description: Notes about the pricing arrangement.
+    FeeRequest:
+      type: object
+      description: Request body for POST /internal/calculate-service-fee.
+      required:
+        - partner_id
+        - service_type
+        - urgency
+        - location
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner whose pricing rules to apply.
+        service_type:
+          type: string
+          description: Type of service (e.g. personal, sub-service, posting).
+          example: personal
+        urgency:
+          type: string
+          description: Urgency level affecting premium calculation.
+          enum:
+            - standard
+            - rush
+            - same_day
+            - emergency
+          example: standard
+        location:
+          $ref: '#/components/schemas/Location'
+        party_count:
+          type: integer
+          description: Number of parties to serve. Required for per_party strategy. Default 1.
+          default: 1
+          example: 3
+        client_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Optional client ID for client-specific pricing overrides.
+    ResolveStatusRequest:
+      type: object
+      description: Request body for POST /internal/resolve-attempt-status.
+      required:
+        - partner_id
+        - result_code
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner whose custom status mappings to search.
+        result_code:
+          type: string
+          description: The result code to resolve.
+          example: LEFT_WITH_COWORKER
+    TransferCheckRequest:
+      type: object
+      description: Request body for POST /internal/check-transfer-acceptance.
+      required:
+        - from_partner_id
+        - to_partner_id
+        - location
+      properties:
+        from_partner_id:
+          type: string
+          format: uuid
+          description: Partner initiating the transfer.
+        to_partner_id:
+          type: string
+          format: uuid
+          description: Partner receiving the transfer.
+        location:
+          $ref: '#/components/schemas/Location'
+    FilingFeeRequest:
+      type: object
+      description: Request body for POST /internal/calculate-filing-fee.
+      required:
+        - partner_id
+        - court_id
+        - base_fee
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner whose filing markup rules to apply.
+        court_id:
+          type: string
+          description: Court identifier for court-specific overrides.
+          example: CA-LA-SUP
+        base_fee:
+          type: number
+          format: double
+          description: Court's base filing fee before partner markup.
+          example: 435
+        fee_waived:
+          type: boolean
+          description: Whether the court has waived the filing fee.
+          default: false
+    FeeWaiverCheckRequest:
+      type: object
+      description: Request body for POST /internal/check-fee-waiver-eligibility.
+      required:
+        - partner_id
+        - filer_type
+        - court_id
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner to check eligibility for.
+        filer_type:
+          type: string
+          description: Type of filer (e.g. individual, government).
+          example: individual
+        court_id:
+          type: string
+          description: Court identifier.
+          example: CA-LA-SUP
+    PlanLimitCheckRequest:
+      type: object
+      description: Request body for POST /internal/check-plan-limit.
+      required:
+        - partner_id
+        - resource
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner whose plan limits to check.
+        resource:
+          type: string
+          description: Resource type to check (e.g. orders, clients, api_calls).
+          example: orders
+    HealthResponse:
+      type: object
+      description: Full readiness check response including dependency statuses.
+      properties:
+        status:
+          type: string
+          description: Overall health status.
+          enum:
+            - ok
+            - degraded
+          example: ok
+        database:
+          type: string
+          description: Primary database connection status.
+          example: ok
+        read_replica:
+          type: string
+          description: Read replica connection status.
+          example: ok
+        cache:
+          type: string
+          description: Redis cache connection status.
+          example: ok
+        event_bus:
+          type: string
+          description: RabbitMQ event bus connection status.
+          example: ok
+        uptime_seconds:
+          type: integer
+          format: int64
+          description: Seconds since the service started.
+          example: 3600
+        go_version:
+          type: string
+          description: Go runtime version.
+          example: go1.24.0
+    CreatePartnerResponse:
+      type: object
+      description: Response returned after successfully creating a new partner.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the newly created partner.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Initial partner status (always pending_setup).
+          example: pending_setup
+        onboarding_checklist:
+          $ref: '#/components/schemas/OnboardingChecklist'
+    UpdateStatusResponse:
+      type: object
+      description: Response returned after a partner status transition.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        previous_status:
+          type: string
+          description: Status before the update.
+          example: trial
+        new_status:
+          type: string
+          description: Status after the update.
+          example: active
+        suspended_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Timestamp when partner was suspended (only present if new_status is suspended).
+    UpdatePlanResponse:
+      type: object
+      description: Response returned after a subscription plan change.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        previous_plan:
+          type: string
+          description: Plan before the update.
+          example: professional
+        new_plan:
+          type: string
+          description: Plan after the update.
+          example: enterprise
+    FeeResult:
+      type: object
+      description: Calculated service fee response with strategy metadata and line-item breakdown.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          description: Partner whose pricing was applied.
+        pricing_strategy:
+          type: string
+          description: Which pricing model produced the result.
+          enum:
+            - flat_per_location
+            - flat_plus_mileage
+            - per_party
+            - tiered_flat
+          example: flat_per_location
+        coverage:
+          type: string
+          description: Whether the partner covers this location.
+          enum:
+            - covered
+            - not_covered
+          example: covered
+        fee_line_items:
+          type: array
+          description: Itemised fee components.
+          items:
+            $ref: '#/components/schemas/FeeLineItem'
+        estimated_total:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Total of all line items. Null when not_covered.
+          example: 100
+        location_matched:
+          description: Which location rule matched, if any.
+          oneOf:
+            - $ref: '#/components/schemas/LocationMatched'
+            - type: 'null'
+        mileage_detail:
+          description: Mileage calculation details (flat_plus_mileage strategy only).
+          oneOf:
+            - $ref: '#/components/schemas/MileageDetail'
+            - type: 'null'
+        per_party_detail:
+          description: Per-party calculation details (per_party strategy only).
+          oneOf:
+            - $ref: '#/components/schemas/PerPartyDetail'
+            - type: 'null'
+        client_adjustments:
+          description: Client-level pricing adjustments applied, if any.
+          oneOf:
+            - $ref: '#/components/schemas/ClientAdjustments'
+            - type: 'null'
+        message:
+          type: string
+          description: Human-readable message (e.g. not_covered reason).
+    FilingFeeResult:
+      type: object
+      description: Calculated filing fee returned by POST /internal/calculate-filing-fee.
+      properties:
+        markup_type:
+          type: string
+          description: Type of markup applied (flat or percentage).
+          example: percentage
+        court_base_fee:
+          type: number
+          format: double
+          description: Original court filing fee.
+          example: 435
+        markup_value:
+          type: number
+          format: double
+          description: Markup amount or percentage value.
+          example: 10
+        markup_amount:
+          type: number
+          format: double
+          description: Actual dollar amount of markup applied.
+          example: 43.5
+        total_fee:
+          type: number
+          format: double
+          description: Total filing fee (court fee + markup).
+          example: 478.5
+        override_applied:
+          type: boolean
+          description: Whether a court-specific override was used.
+        fee_waived:
+          type: boolean
+          description: Whether the filing fee was waived.
+    FeeWaiverCheckResult:
+      type: object
+      description: Fee waiver eligibility result.
+      properties:
+        eligible:
+          type: boolean
+          description: Whether the filer is eligible for a fee waiver.
+          example: true
+        reason:
+          type: string
+          description: Explanation of the eligibility determination.
+          example: Government filers are exempt from filing fees
+    PlanLimitCheckResult:
+      type: object
+      description: Plan limit check result.
+      properties:
+        plan:
+          type: string
+          description: Current subscription plan.
+          example: professional
+        current_usage:
+          type: integer
+          description: Current usage count for the resource.
+          example: 450
+        limit:
+          type: integer
+          description: Plan limit for the resource (-1 means unlimited).
+          example: 500
+        allowed:
+          type: boolean
+          description: Whether the operation is allowed within plan limits.
+          example: true
+    RateLimitConfig:
+      type: object
+      description: Rate limiting configuration for a partner's API access.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        plan:
+          type: string
+          description: Partner's subscription plan.
+          example: professional
+        requests_per_minute:
+          type: integer
+          description: Maximum API requests per minute.
+          example: 60
+        requests_per_hour:
+          type: integer
+          description: Maximum API requests per hour.
+          example: 1000
+        burst_size:
+          type: integer
+          description: Maximum burst size for rate limiter token bucket.
+          example: 10
+    StatusResolution:
+      type: object
+      description: Result of resolving a result code to a base status.
+      properties:
+        result_code:
+          type: string
+          description: The result code that was resolved.
+          example: LEFT_WITH_COWORKER
+        maps_to_base:
+          type: string
+          description: Base system status this code maps to.
+          example: served
+        next_party_status:
+          type: string
+          description: Status the serving party transitions to.
+          example: completed
+        is_custom:
+          type: boolean
+          description: Whether this is a partner-defined custom status.
+          example: true
+    TransferCheckResult:
+      type: object
+      description: Transfer acceptance check result.
+      properties:
+        will_accept:
+          type: boolean
+          description: Whether the receiving partner will accept the transfer.
+          example: true
+        auto_accept:
+          type: boolean
+          description: Whether the transfer will be auto-accepted (no manual approval needed).
+          example: false
+        transfer_fee:
+          type: number
+          format: double
+          description: Fee for the transfer (0 if no fee).
+          example: 15
+        reason:
+          type: string
+          description: Explanation of the acceptance decision.
+          example: Partner accepts inbound transfers within jurisdiction
+    CreateClientResponse:
+      type: object
+      description: Response returned after successfully creating a client.
+      properties:
+        client_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the newly created client.
+        status:
+          type: string
+          description: Initial client status (always active).
+          example: active
+    ClientListResponse:
+      type: object
+      description: Paginated list of clients belonging to the partner.
+      properties:
+        clients:
+          type: array
+          description: Array of client records.
+          items:
+            $ref: '#/components/schemas/Client'
+        total:
+          type: integer
+          description: Total number of clients matching the query.
+          example: 42
+    ClientDetailResponse:
+      type: object
+      description: Detailed client view including optional pricing overrides.
+      properties:
+        client:
+          $ref: '#/components/schemas/Client'
+        pricing:
+          description: Client-specific pricing overrides, if configured.
+          oneOf:
+            - $ref: '#/components/schemas/ClientPricing'
+            - type: 'null'
+    PartnerSettings:
+      type: object
+      description: Composite settings view consumed by other services (SOP, Filing, Gateway) on every request to determine partner capabilities and configuration.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Current partner lifecycle status.
+          enum:
+            - pending_setup
+            - trial
+            - active
+            - suspended
+            - terminated
+        partner_type:
+          type: string
+          enum:
+            - law_firm
+            - process_serving_company
+        subscription_plan:
+          type: string
+          enum:
+            - starter
+            - professional
+            - enterprise
+        timezone:
+          type: string
+          description: Partner's IANA timezone.
+          example: America/Los_Angeles
+        features:
+          description: Feature flags for the partner.
+          oneOf:
+            - $ref: '#/components/schemas/PartnerFeatures'
+            - type: 'null'
+        transfer_settings:
+          description: Transfer acceptance configuration.
+          oneOf:
+            - $ref: '#/components/schemas/TransferSettings'
+            - type: 'null'
+    Partner:
+      type: object
+      description: A partner organization in the LegalDispatch platform.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique partner identifier.
+        legal_name:
+          type: string
+          description: Official legal name.
+          example: Acme Process Serving LLC
+        trade_name:
+          type:
+            - string
+            - 'null'
+          description: DBA name.
+        partner_type:
+          type: string
+          description: Type of partner organization.
+          enum:
+            - law_firm
+            - process_serving_company
+        status:
+          type: string
+          description: Current lifecycle status.
+          enum:
+            - pending_setup
+            - trial
+            - active
+            - suspended
+            - terminated
+        subscription_plan:
+          type: string
+          description: Current subscription tier.
+          enum:
+            - starter
+            - professional
+            - enterprise
+        timezone:
+          type: string
+          description: IANA timezone identifier.
+          example: America/New_York
+        ein:
+          type:
+            - string
+            - 'null'
+          description: Employer Identification Number.
+        state_bar_number:
+          type:
+            - string
+            - 'null'
+          description: State bar registration number (law firms).
+        primary_contact_name:
+          type: string
+          description: Full name of the primary contact.
+        primary_contact_email:
+          type: string
+          format: email
+          description: Email of the primary contact.
+        primary_contact_phone:
+          type:
+            - string
+            - 'null'
+          description: Phone number of the primary contact.
+        address_street:
+          type:
+            - string
+            - 'null'
+        address_city:
+          type:
+            - string
+            - 'null'
+        address_state:
+          type:
+            - string
+            - 'null'
+        address_zip:
+          type:
+            - string
+            - 'null'
+        created_by:
+          type:
+            - string
+            - 'null'
+          description: User ID of the admin who created this partner.
+        trial_ends_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the trial period expires.
+        suspended_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the partner was suspended.
+        suspended_reason:
+          type:
+            - string
+            - 'null'
+          description: Reason for suspension.
+        terminated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the partner was terminated.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Client:
+      type: object
+      description: A client organization belonging to a partner.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique client identifier.
+        legal_name:
+          type: string
+          description: Official legal name of the client.
+          example: Smith & Associates LLP
+        trade_name:
+          type:
+            - string
+            - 'null'
+          description: DBA name.
+        client_type:
+          type: string
+          description: Type of client organization.
+          enum:
+            - law_firm
+            - attorney
+            - corporation
+            - individual
+            - government_agency
+        status:
+          type: string
+          description: Current client status.
+          enum:
+            - active
+            - inactive
+            - suspended
+        billing_method:
+          type: string
+          description: How the client is billed.
+          enum:
+            - invoice
+            - prepaid
+            - credit_card
+        account_number:
+          type:
+            - string
+            - 'null'
+          description: Partner-assigned account number.
+        payment_terms_days:
+          type: integer
+          description: Net payment terms in days.
+          example: 30
+        credit_limit:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Maximum credit for invoice billing.
+        tax_id:
+          type:
+            - string
+            - 'null'
+          description: Client's tax identification number.
+        primary_contact_name:
+          type: string
+          description: Full name of the primary contact.
+        primary_contact_email:
+          type: string
+          format: email
+          description: Email of the primary contact.
+        primary_contact_phone:
+          type:
+            - string
+            - 'null'
+          description: Phone number of the primary contact.
+        address_street:
+          type:
+            - string
+            - 'null'
+        address_city:
+          type:
+            - string
+            - 'null'
+        address_state:
+          type:
+            - string
+            - 'null'
+        address_zip:
+          type:
+            - string
+            - 'null'
+        notes:
+          type:
+            - string
+            - 'null'
+          description: Internal notes about this client.
+        created_by:
+          type:
+            - string
+            - 'null'
+          description: User ID of who created this client.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ClientPricing:
+      type: object
+      description: Per-client pricing overrides. Null fields mean "use the partner default", allowing partial overrides (e.g. custom SOP base fee but standard filing rates).
+      properties:
+        sop_base_fee_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for SOP base fee.
+        sop_mileage_rate_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for SOP mileage rate.
+        sop_rush_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for rush premium.
+        sop_same_day_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for same-day premium.
+        sop_emergency_premium_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for emergency premium.
+        sop_per_party_rate_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override for per-party rate (per_party strategy only).
+        filing_markup_type_override:
+          type:
+            - string
+            - 'null'
+          description: Override filing markup type.
+          enum:
+            - flat
+            - percentage
+        filing_markup_value_override:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Override filing markup amount.
+        waive_service_fees:
+          type: boolean
+          description: Whether all service fees are waived for this client.
+        discount_percentage:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Global discount percentage.
+        notes:
+          type:
+            - string
+            - 'null'
+          description: Notes about the pricing arrangement.
+    PartnerBranding:
+      type: object
+      description: White-label branding configuration for a partner's portal.
+      properties:
+        intake_disclaimer:
+          type:
+            - string
+            - 'null'
+          description: Custom disclaimer shown on the intake form.
+        logo_url:
+          type:
+            - string
+            - 'null'
+          format: uri
+          description: URL to the partner's logo image.
+        primary_color:
+          type:
+            - string
+            - 'null'
+          description: Primary brand color (hex).
+          example: '#1a73e8'
+        secondary_color:
+          type:
+            - string
+            - 'null'
+          description: Secondary brand color (hex).
+          example: '#ffffff'
+        portal_domain:
+          type:
+            - string
+            - 'null'
+          description: Custom portal domain (e.g. serve.acmelegal.com).
+          example: serve.acmelegal.com
+        portal_domain_verified:
+          type: boolean
+          description: Whether the custom domain DNS has been verified.
+        email_sender_name:
+          type:
+            - string
+            - 'null'
+          description: Display name for outbound emails.
+          example: Acme Legal Services
+        email_reply_to:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Reply-to address for outbound emails.
+        custom_terms_url:
+          type:
+            - string
+            - 'null'
+          format: uri
+          description: URL to custom terms of service.
+        notification_templates:
+          description: Custom notification template overrides (JSON object).
+    PartnerFeatures:
+      type: object
+      description: Feature flags controlling which capabilities are enabled for a partner.
+      properties:
+        api_access_enabled:
+          type: boolean
+          description: Whether the partner has API access.
+        batch_import_enabled:
+          type: boolean
+          description: Whether batch order import is available.
+        service_of_process_enabled:
+          type: boolean
+          description: Whether SOP workflow is enabled.
+        transfer_network_enabled:
+          type: boolean
+          description: Whether the partner can participate in the transfer network.
+        expert_review_enabled:
+          type: boolean
+          description: Whether expert review of documents is available.
+        custom_fields_enabled:
+          type: boolean
+          description: Whether custom fields on orders are available.
+        white_label_enabled:
+          type: boolean
+          description: Whether white-label branding is available.
+        advanced_reporting_enabled:
+          type: boolean
+          description: Whether advanced reporting/analytics is available.
+        physical_filing_enabled:
+          type: boolean
+          description: Whether physical court filing is available.
+        efiling_enabled:
+          type: boolean
+          description: Whether electronic filing is available.
+        extra_flags:
+          description: Additional feature flags (extensible JSON object).
+    OnboardingChecklist:
+      type: object
+      description: Tracks onboarding progress for a newly created partner.
+      properties:
+        profile_complete:
+          type: boolean
+          description: Whether the partner profile has been fully filled out.
+        billing_configured:
+          type: boolean
+          description: Whether billing/payment method has been configured.
+        first_user_invited:
+          type: boolean
+          description: Whether the first user has been invited to the account.
+        branding_configured:
+          type: boolean
+          description: Whether branding settings have been configured.
+        first_order_created:
+          type: boolean
+          description: Whether the partner has created their first order.
+        completed_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When all checklist items were completed.
+    SOPPricing:
+      type: object
+      description: Service of Process pricing configuration for a partner.
+      properties:
+        pricing_strategy:
+          type: string
+          description: Which pricing calculation model to use.
+          enum:
+            - flat_per_location
+            - flat_plus_mileage
+            - per_party
+            - tiered_flat
+          example: flat_per_location
+        coverage_mode:
+          type: string
+          description: Whether to serve all locations or only those with explicit rules.
+          enum:
+            - national
+            - location_rules_only
+          example: national
+        national_base_fee:
+          type: number
+          format: double
+          description: Default base fee for standard service.
+          example: 75
+        national_mileage_rate:
+          type: number
+          format: double
+          description: Per-mile surcharge rate.
+          example: 0.65
+        rush_premium:
+          type: number
+          format: double
+          description: Rush service premium (1-3 day).
+          example: 25
+        same_day_premium:
+          type: number
+          format: double
+          description: Same-day service premium.
+          example: 50
+        emergency_premium:
+          type: number
+          format: double
+          description: Emergency/after-hours premium.
+          example: 100
+        transfer_acceptance_fee:
+          type: number
+          format: double
+          description: Fee charged per accepted inbound transfer.
+          example: 15
+        reference_latitude:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Latitude of partner's mileage reference point.
+        reference_longitude:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Longitude of partner's mileage reference point.
+        included_miles:
+          type: number
+          format: double
+          description: Miles included in base fee before mileage charges.
+          example: 0
+        urgency_premium_mode:
+          type: string
+          description: Whether urgency premium is per-order or per-party.
+          enum:
+            - per_order
+            - per_party
+          example: per_order
+    SOPLocationRule:
+      type: object
+      description: Location-specific pricing override rule for SOP services.
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          description: Unique rule identifier.
+        scope:
+          type: string
+          description: Geographic scope level.
+          enum:
+            - state
+            - county
+            - city
+            - zip
+        scope_value:
+          type: string
+          description: Value matching the scope.
+          example: Los Angeles
+        state:
+          type: string
+          description: Two-letter US state code.
+          example: CA
+        base_fee:
+          type: number
+          format: double
+          description: Base fee for this location.
+        mileage_rate:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Mileage rate for this location.
+        per_party_rate:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: Per-party rate for this location (per_party strategy).
+        tier_label:
+          type:
+            - string
+            - 'null'
+          description: Pricing tier display name (tiered_flat strategy).
+        description:
+          type:
+            - string
+            - 'null'
+          description: Note about why this rule exists.
+        active:
+          type: boolean
+          description: Whether the rule is currently active.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CustomStatus:
+      type: object
+      description: A partner-defined custom attempt result code.
+      properties:
+        status_id:
+          type: string
+          format: uuid
+          description: Unique status identifier.
+        result_code:
+          type: string
+          description: Machine-readable code for this status.
+          example: LEFT_WITH_COWORKER
+        display_label:
+          type: string
+          description: Human-readable label.
+          example: Left with Co-Worker
+        maps_to_base:
+          type: string
+          description: Base system status this maps to.
+          example: served
+        next_party_status:
+          type: string
+          description: Status the serving party transitions to.
+          example: completed
+        requires_follow_up:
+          type: boolean
+          description: Whether this triggers a follow-up action.
+        active:
+          type: boolean
+          description: Whether this custom status is active.
+        description:
+          type:
+            - string
+            - 'null'
+          description: Explanation of when to use this status.
+        created_at:
+          type: string
+          format: date-time
+    TransferSettings:
+      type: object
+      description: Global transfer acceptance configuration for a partner.
+      properties:
+        accepts_inbound:
+          type: boolean
+          description: Whether this partner accepts inbound transfers.
+        transfer_acceptance_fee:
+          type: number
+          format: double
+          description: Fee charged per accepted transfer.
+          example: 15
+        max_inbound_per_day:
+          type:
+            - integer
+            - 'null'
+          description: Maximum inbound transfers per day. Null means unlimited.
+          example: 50
+    AutoAcceptRule:
+      type: object
+      description: Rule defining when a partner automatically accepts inbound transfers.
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          description: Unique rule identifier.
+        from_partner_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: Restrict to transfers from a specific partner. Null means any partner.
+        jurisdiction_type:
+          type: string
+          description: Type of jurisdiction for the rule.
+          example: state
+        jurisdiction_value:
+          type: string
+          description: Value for the jurisdiction (e.g. state code, county name).
+          example: CA
+        auto_accept:
+          type: boolean
+          description: Whether to auto-accept matching transfers.
+        active:
+          type: boolean
+          description: Whether this rule is active.
+        created_at:
+          type: string
+          format: date-time
+    FilingPricing:
+      type: object
+      description: Global filing fee markup settings for a partner.
+      properties:
+        global_markup_type:
+          type: string
+          description: Type of markup (flat or percentage).
+          enum:
+            - flat
+            - percentage
+          example: percentage
+        global_markup_value:
+          type: number
+          format: double
+          description: Markup amount or percentage.
+          example: 10
+        markup_description:
+          type:
+            - string
+            - 'null'
+          description: Human-readable description of the markup.
+        waive_markup_for_fee_waiver:
+          type: boolean
+          description: Whether to waive the partner markup when the court waives the filing fee.
+    FilingCourtOverride:
+      type: object
+      description: Court-specific filing fee markup override.
+      properties:
+        id:
+          type: string
+          format: uuid
+        court_id:
+          type: string
+          description: Court identifier.
+          example: CA-LA-SUP
+        markup_type:
+          type: string
+          description: Override markup type.
+          enum:
+            - flat
+            - percentage
+        markup_value:
+          type: number
+          format: double
+          description: Override markup amount.
+        preferred_filing_method:
+          type:
+            - string
+            - 'null'
+          description: Preferred filing method for this court.
+          enum:
+            - efiling
+            - physical
+        description:
+          type:
+            - string
+            - 'null'
+          description: Note about this override.
+        created_at:
+          type: string
+          format: date-time
+    FeeLineItem:
+      type: object
+      description: An individual line item in a fee breakdown.
+      properties:
+        type:
+          type: string
+          description: Type of fee component (base_fee, mileage, rush_premium, discount).
+          example: base_fee
+        description:
+          type: string
+          description: Human-readable description.
+          example: Service fee — Los Angeles County
+        amount:
+          type: number
+          format: double
+          description: Dollar amount for this line item (negative for discounts).
+          example: 75
+        source:
+          type: string
+          description: Where this fee came from (location_rule, partner_default, client_override, calculated).
+          example: location_rule
+        rule_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+          description: ID of the location rule that produced this item, if applicable.
+    AppliedRule:
+      type: object
+      description: Identifies which location rule was applied during fee calculation.
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          description: ID of the location rule that matched.
+        scope:
+          type: string
+          description: Scope that matched.
+          example: county
+        value:
+          type: string
+          description: Scope value that matched.
+          example: Los Angeles
+    LocationMatched:
+      type: object
+      description: Describes which location rule matched during fee calculation.
+      properties:
+        scope:
+          type: string
+          description: Geographic scope that matched.
+          example: county
+        scope_value:
+          type: string
+          description: Value that matched.
+          example: Los Angeles
+        tier_label:
+          type:
+            - string
+            - 'null'
+          description: Pricing tier label (tiered_flat strategy only).
+    MileageDetail:
+      type: object
+      description: Mileage calculation breakdown for flat_plus_mileage strategy.
+      properties:
+        total_miles:
+          type: number
+          format: double
+          example: 27.3
+        included_miles:
+          type: number
+          format: double
+          example: 15
+        billable_miles:
+          type: number
+          format: double
+          example: 12.3
+        rate_per_mile:
+          type: number
+          format: double
+          example: 1.25
+        reference_point:
+          type: string
+          description: What the mileage was measured from.
+          example: partner_office
+    PerPartyDetail:
+      type: object
+      description: Per-party calculation breakdown for per_party strategy.
+      properties:
+        party_count:
+          type: integer
+          example: 3
+        per_party_rate:
+          type: number
+          format: double
+          example: 55
+        per_party_urgency:
+          type: number
+          format: double
+          example: 25
+        urgency_premium_mode:
+          type: string
+          enum:
+            - per_order
+            - per_party
+          example: per_party
+    ClientAdjustments:
+      type: object
+      description: Client-level pricing modifications applied to the fee.
+      properties:
+        client_id:
+          type: string
+          format: uuid
+        base_fee_override:
+          type:
+            - number
+            - 'null'
+          format: double
+        discount_percentage:
+          type:
+            - number
+            - 'null'
+          format: double
+        original_total:
+          type: number
+          format: double
+        adjusted_total:
+          type: number
+          format: double
+    ContactInfo:
+      type: object
+      description: Primary contact information.
+      required:
+        - primary_name
+        - primary_email
+      properties:
+        primary_name:
+          type: string
+          description: Full name of the contact.
+          example: Jane Smith
+        primary_email:
+          type: string
+          format: email
+          description: Email address.
+          example: jane@acmelegal.com
+        primary_phone:
+          type:
+            - string
+            - 'null'
+          description: Phone number.
+          example: +1-555-0100
+    AddressInfo:
+      type: object
+      description: Physical mailing address.
+      required:
+        - street
+        - city
+        - state
+        - zip
+      properties:
+        street:
+          type: string
+          example: 123 Main St
+        city:
+          type: string
+          example: Los Angeles
+        state:
+          type: string
+          description: Two-letter US state code.
+          example: CA
+        zip:
+          type: string
+          example: '90001'
+    Location:
+      type: object
+      description: Geographic location used for fee calculation and rule matching.
+      properties:
+        state:
+          type: string
+          description: Two-letter US state code.
+          example: CA
+        county:
+          type: string
+          example: Los Angeles
+        city:
+          type: string
+          example: Los Angeles
+        zip:
+          type: string
+          example: '90001'

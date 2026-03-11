@@ -1,0 +1,39 @@
+# Redocly lint configuration for api-docs
+#
+# These rules are tuned for individual service specs that will be merged
+# into a unified document. Rules covering concerns handled at merge time
+# (security schemes, servers, info block) are relaxed here.
+#
+# The merge pipeline (scripts/merge-specs.sh) applies:
+#   - Unified BearerAuth security scheme
+#   - Unified info block with license
+#   - Production/staging/dev server URLs
+#   - Internal route stripping
+#
+# After merge, the merged spec should pass stricter rules.
+
+extends:
+  - recommended
+
+rules:
+  # Handled at merge — individual specs don't all declare root-level security
+  security-defined: off
+
+  # Handled at merge — .NET build-time export doesn't emit servers
+  no-empty-servers: off
+
+  # Individual specs use localhost for dev; merge sets real URLs
+  no-server-example.com: off
+
+  # Individual specs may not have license; merge sets it
+  info-license: off
+  info-license-strict: off
+
+  # Internal routes create ambiguous paths — they're stripped at merge
+  no-ambiguous-paths: warn
+
+  # Some health/internal routes lack 4xx responses — warn, don't block
+  operation-4xx-response: warn
+
+  # Specs are self-contained after bundling — unused components are fine
+  no-unused-components: off

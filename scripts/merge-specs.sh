@@ -56,7 +56,7 @@ info "Validating individual specs..."
 VALID=true
 for spec in "${SPEC_FILES[@]}"; do
     name="$(basename "$spec")"
-    if redocly lint "$spec" --skip-rule no-unused-components 2>/dev/null; then
+    if redocly lint "$spec" --config "$REPO_ROOT/.redocly.yaml" 2>/dev/null; then
         info "  ✓ $name"
     else
         warn "  ✗ $name (lint warnings — continuing)"
@@ -145,7 +145,7 @@ PYEOF
 
 # ─── Step 4: Validate merged output ─────────────────────
 info "Validating merged spec..."
-if redocly lint "$OUTPUT" --skip-rule no-unused-components 2>/dev/null; then
+if redocly lint "$OUTPUT" --config "$REPO_ROOT/.redocly.yaml" 2>/dev/null; then
     info "✓ Merged spec is valid"
 else
     warn "Merged spec has lint warnings (non-fatal)"

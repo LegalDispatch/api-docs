@@ -34,10 +34,10 @@ validate_dir() {
 
     info "Validating $label..."
     for ext in yaml yml json; do
-        for spec in "$dir"/*."$ext" 2>/dev/null; do
+        for spec in "$dir"/*."$ext"; do
             [ -f "$spec" ] || continue
             name="$(basename "$spec")"
-            if redocly lint "$spec" --skip-rule no-unused-components 2>/dev/null; then
+            if redocly lint "$spec" --config "$REPO_ROOT/.redocly.yaml" 2>/dev/null; then
                 info "  ✓ $name"
             else
                 warn "  ✗ $name"

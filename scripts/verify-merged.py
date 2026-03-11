@@ -20,7 +20,7 @@ for p, methods in spec["paths"].items():
         if isinstance(op, dict) and "operationId" in op:
             ops.append(op["operationId"])
 
-unprefixed = [o for o in ops if not any(o.startswith(pfx) for pfx in ("auth_", "uas_", "sop_", "doc_", "pms_"))]
+unprefixed = [o for o in ops if not any(o.startswith(pfx) for pfx in ("auth_", "uas_", "sop_", "doc_", "pms_", "ops_"))]
 print(f"Unprefixed operationIds: {unprefixed}")
 
 errors = []

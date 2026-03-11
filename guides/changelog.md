@@ -10,6 +10,24 @@ Non-breaking additions (new endpoints, new optional fields) are added to the cur
 
 ---
 
+## v1.1.0 — Operations Service
+
+**Operations service integrated.** 95 public endpoints across 6 services.
+
+### Operations (`/api/v1/ops`)
+
+- Work order lifecycle: create, list, get, update, cancel, complete, close, claim, release
+- Agent assignment: assign, reassign, unassign, history, bulk-assign
+- Dispatch: dispatch, bulk-dispatch
+- Field attempts: log, list, amend
+- Workers: search, get
+- Deliverables: create, list, update, review, delete
+- Document packaging: list, add, arrange, remove, preview-bundle, generate-packet
+- Review queue: list, approve, reject, request-changes
+- Ops notes: create, list
+
+---
+
 ## v1.0.0 — Initial Release
 
 **Unified spec published.** 62 public endpoints across 5 services.

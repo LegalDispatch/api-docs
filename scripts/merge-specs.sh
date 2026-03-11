@@ -178,6 +178,16 @@ TAG_MAP = {
     "Admin": "Partners (Admin)",
     "Partner": "Partners",
     "Clients": "Partners",
+    # operations-service
+    "Work Orders": "Operations",
+    "Assignment": "Operations",
+    "Dispatch": "Operations",
+    "Field Attempts": "Operations",
+    "Workers": "Operations",
+    "Deliverables": "Operations",
+    "Documents & Packaging": "Operations",
+    "Review Queue": "Operations",
+    "Ops Notes": "Operations",
 }
 
 for path, methods in spec.get("paths", {}).items():
@@ -198,6 +208,7 @@ spec["tags"] = [
     {"name": "Documents", "description": "Document downloads and signed URL generation."},
     {"name": "Partners", "description": "Partner self-service: pricing rules, custom statuses, transfer settings, and client management."},
     {"name": "Partners (Admin)", "description": "Super-admin partner management: create partners, update status and plans."},
+    {"name": "Operations", "description": "Work orders, agent assignment, dispatch, field attempts, deliverables, document packaging, review queue, and ops notes."},
 ]
 
 # ── 4c. Set unified info block ───────────────────────────
@@ -207,7 +218,7 @@ spec["info"] = {
     "description": (
         "Unified API for the LegalDispatch platform. "
         "Covers authentication, user management, service of process, "
-        "document management, and partner operations.\n\n"
+        "document management, partner operations, and work order operations.\n\n"
         "All endpoints require a Bearer JWT token unless otherwise noted. "
         "Error responses follow a standard envelope: "
         '`{ "code": "ERROR_CODE", "message": "...", "request_id": "..." }`'

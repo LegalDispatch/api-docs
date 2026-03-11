@@ -18,7 +18,7 @@ This repo holds the **unified OpenAPI specification** and **narrative guides** f
 ## Repository Structure
 
 ```
-legaldispatch-api-docs/
+api-docs/
 ├── specs/                        # Individual service specs (pushed by service CI)
 │   ├── authentication.json
 │   ├── user-account.json

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, staging, dev]
     paths:
-      - 'specs/**'
+      - "specs/**"
 
 jobs:
   merge:
@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install redocly
         run: npm install -g @redocly/cli

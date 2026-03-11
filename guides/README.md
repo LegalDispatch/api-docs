@@ -4,11 +4,11 @@
 
 ## Base URL
 
-| Environment | URL |
-|-------------|-----|
-| Production  | `https://api.legaldispatch.dev` |
+| Environment | URL                                     |
+| ----------- | --------------------------------------- |
+| Production  | `https://api.legaldispatch.dev`         |
 | Staging     | `https://api-staging.legaldispatch.dev` |
-| Development | `http://localhost:8080` |
+| Development | `http://localhost:8080`                 |
 
 ## Authentication
 

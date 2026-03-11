@@ -1,14 +1,16 @@
 # Redocly lint configuration for api-docs
 #
 # These rules are tuned for individual service specs that will be merged
-# into a unified document. Rules covering concerns handled at merge time
-# (security schemes, servers, info block) are relaxed here.
+# into a unified document. Each service exports a public-only spec with
+# prefixed operationIds and canonical ErrorResponse schemas.
 #
 # The merge pipeline (scripts/merge-specs.sh) applies:
 #   - Unified BearerAuth security scheme
 #   - Unified info block with license
 #   - Production/staging/dev server URLs
-#   - Internal route stripping
+#   - Tag remapping and descriptions
+#   - Canonical shared schemas (ErrorResponse, PaginationMeta)
+#   - Shared parameters (X-Correlation-ID, page, page_size)
 #
 # After merge, the merged spec should pass stricter rules.
 
@@ -29,10 +31,10 @@ rules:
   info-license: off
   info-license-strict: off
 
-  # Internal routes create ambiguous paths — they're stripped at merge
+  # Services export public-only specs, but warn on any ambiguous paths
   no-ambiguous-paths: warn
 
-  # Some health/internal routes lack 4xx responses — warn, don't block
+  # Some endpoints may lack 4xx responses — warn, don't block
   operation-4xx-response: warn
 
   # Specs are self-contained after bundling — unused components are fine

@@ -5,12 +5,17 @@
 #
 # Prerequisites:
 #   npm install -g @redocly/cli
+#   pip3 install pyyaml
 #
-# What it does:
-#   1. Validates each spec in specs/
-#   2. Merges them into merged/openapi.yaml using redocly join
-#   3. Strips internal routes, health checks, and metrics
-#   4. Validates the merged output
+# Pipeline:
+#   1. Validate each spec in specs/
+#   2. Pre-process: remove ErrorResponse (injected post-merge) + normalize version
+#   3. Merge via redocly join
+#   4. Post-process: set platform metadata (info, tags, servers, security, schemas, parameters)
+#   5. Validate merged output
+#
+# Upstream services handle: public-only paths, prefixed operationIds, ErrorResponse.
+# This script only handles platform-level concerns + the shared ErrorResponse schema.
 #
 set -euo pipefail
 
@@ -19,12 +24,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SPECS_DIR="$REPO_ROOT/specs"
 MERGED_DIR="$REPO_ROOT/merged"
 OUTPUT="$MERGED_DIR/openapi.yaml"
+export SPECS_DIR MERGED_DIR OUTPUT
 
 # ─── Colors ──────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -36,7 +42,6 @@ if ! command -v redocly &>/dev/null; then
     exit 1
 fi
 
-# Collect all spec files (JSON + YAML)
 SPEC_FILES=()
 for ext in yaml yml json; do
     while IFS= read -r -d '' file; do
@@ -53,7 +58,6 @@ info "Found ${#SPEC_FILES[@]} spec file(s) in $SPECS_DIR"
 
 # ─── Step 1: Validate individual specs ───────────────────
 info "Validating individual specs..."
-VALID=true
 for spec in "${SPEC_FILES[@]}"; do
     name="$(basename "$spec")"
     if redocly lint "$spec" --config "$REPO_ROOT/.redocly.yaml" 2>/dev/null; then
@@ -63,13 +67,68 @@ for spec in "${SPEC_FILES[@]}"; do
     fi
 done
 
-# ─── Step 2: Merge specs ────────────────────────────────
-info "Merging specs into unified document..."
+# ─── Step 2: Pre-process — remove ErrorResponse + normalize version ──
+# ErrorResponse is defined in every service spec but differs slightly between
+# .NET and Go (descriptions, examples). Remove it before join, inject the
+# canonical version in post-processing. Also normalize OpenAPI version to 3.1.0
+# (.NET 10 exports 3.1.1, Go specs use 3.1.0).
+info "Pre-processing specs..."
+PREPROC_DIR=$(mktemp -d)
+trap "rm -rf $PREPROC_DIR" EXIT
+export PREPROC_DIR
+
+python3 << 'PYEOF'
+import yaml, json, os
+
+specs_dir = os.environ["SPECS_DIR"]
+preproc_dir = os.environ["PREPROC_DIR"]
+
+# Minimal ErrorResponse placeholder — identical in every spec so redocly join
+# merges without conflict. The full canonical version is injected post-merge.
+PLACEHOLDER_ERROR = {
+    "type": "object",
+    "required": ["code", "message", "request_id"],
+    "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "request_id": {"type": "string", "format": "uuid"},
+        "details": {"type": "object", "additionalProperties": {"type": "string"}},
+    },
+}
+
+for filename in sorted(os.listdir(specs_dir)):
+    if not filename.endswith((".yaml", ".yml", ".json")):
+        continue
+    filepath = os.path.join(specs_dir, filename)
+    with open(filepath) as f:
+        spec = json.load(f) if filename.endswith(".json") else yaml.safe_load(f)
+
+    # Normalize OpenAPI version (.NET 10 → 3.1.1, Go → 3.1.0)
+    spec["openapi"] = "3.1.0"
+
+    # Replace ErrorResponse with identical placeholder (avoids join conflicts)
+    schemas = spec.get("components", {}).get("schemas", {})
+    if "ErrorResponse" in schemas:
+        schemas["ErrorResponse"] = PLACEHOLDER_ERROR
+
+    out_name = filename.rsplit(".", 1)[0] + ".yaml"
+    out_path = os.path.join(preproc_dir, out_name)
+    with open(out_path, "w") as f:
+        yaml.dump(spec, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    print(f"  {filename} → {out_name}")
+PYEOF
+
+PREPROC_FILES=()
+for f in "$PREPROC_DIR"/*.yaml; do
+    [ -f "$f" ] && PREPROC_FILES+=("$f")
+done
+
+# ─── Step 3: Merge specs ────────────────────────────────
+info "Merging specs via redocly join..."
 mkdir -p "$MERGED_DIR"
 
-# Build the redocly join command with all spec files
-# Tags are assigned based on filename prefix
-redocly join "${SPEC_FILES[@]}" \
+redocly join "${PREPROC_FILES[@]}" \
     --output "$OUTPUT" \
     --prefix-tags-with-filename=false \
     2>&1 || {
@@ -79,43 +138,69 @@ redocly join "${SPEC_FILES[@]}" \
 
 info "Merged spec written to $OUTPUT"
 
-# ─── Step 3: Strip internal routes ──────────────────────
-info "Stripping internal routes, health checks, and metrics..."
+# ─── Step 4: Post-process — set platform metadata ───────
+info "Post-processing merged spec..."
 
-# Use Python to filter the merged spec (available on all CI runners)
 python3 << 'PYEOF'
-import yaml
-import sys
-import os
+import yaml, os
 
 output_path = os.environ.get("OUTPUT", "merged/openapi.yaml")
 
-with open(output_path, "r") as f:
+with open(output_path) as f:
     spec = yaml.safe_load(f)
 
-# Paths to strip
-strip_prefixes = ("/internal", "/health", "/ready", "/metrics")
+path_count = len(spec.get("paths", {}))
 
-original_count = len(spec.get("paths", {}))
-filtered_paths = {}
-for path, methods in spec.get("paths", {}).items():
-    if not any(path.startswith(prefix) for prefix in strip_prefixes):
-        filtered_paths[path] = methods
-
-spec["paths"] = filtered_paths
-stripped_count = original_count - len(filtered_paths)
-
-# Simplify security schemes to single BearerAuth
-spec.setdefault("components", {})["securitySchemes"] = {
-    "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "JWT token obtained from POST /api/v1/auth/login. Pass in the Authorization header: Bearer <token>"
-    }
+# ── 4a. Remap service tags to unified navigation groups ──
+TAG_MAP = {
+    # authentication-service
+    "Login": "Authentication",
+    "Tokens": "Authentication",
+    "Password": "Authentication",
+    "Sessions": "Authentication",
+    "JWKS": "Authentication",
+    "API Keys": "Authentication",
+    # user-account-service
+    "Users": "Users",
+    "Registration": "Users",
+    "Invitations": "Users",
+    "Server Profiles": "Users",
+    # sop-service
+    "Service Requests": "Service of Process",
+    "Submission": "Service of Process",
+    "Transfers": "Service of Process",
+    "Fees": "Service of Process",
+    "Batch": "Service of Process",
+    "Operations": "Service of Process",
+    # document-service
+    "Documents": "Documents",
+    # partner-management-service
+    "Admin": "Partners (Admin)",
+    "Partner": "Partners",
+    "Clients": "Partners",
 }
 
-# Set unified info block
+for path, methods in spec.get("paths", {}).items():
+    if not isinstance(methods, dict):
+        continue
+    for method, op in methods.items():
+        if not isinstance(op, dict) or "tags" not in op:
+            continue
+        op["tags"] = list(dict.fromkeys(
+            TAG_MAP.get(t, t) for t in op["tags"]
+        ))
+
+# ── 4b. Set unified tags ────────────────────────────────
+spec["tags"] = [
+    {"name": "Authentication", "description": "Login, logout, token management, password reset, sessions, API keys, and JWKS."},
+    {"name": "Users", "description": "User accounts, registration, invitations, profiles, and role management."},
+    {"name": "Service of Process", "description": "Service requests, submissions, transfers, fees, batch operations, and attempt tracking."},
+    {"name": "Documents", "description": "Document downloads and signed URL generation."},
+    {"name": "Partners", "description": "Partner self-service: pricing rules, custom statuses, transfer settings, and client management."},
+    {"name": "Partners (Admin)", "description": "Super-admin partner management: create partners, update status and plans."},
+]
+
+# ── 4c. Set unified info block ───────────────────────────
 spec["info"] = {
     "title": "LegalDispatch API",
     "version": "1.0.0",
@@ -127,23 +212,112 @@ spec["info"] = {
         "Error responses follow a standard envelope: "
         '`{ "code": "ERROR_CODE", "message": "...", "request_id": "..." }`'
     ),
-    "contact": {
-        "name": "LegalDispatch Engineering",
-        "email": "engineering@legaldispatch.io"
-    },
-    "license": {
-        "name": "Proprietary"
-    }
+    "contact": {"name": "LegalDispatch Engineering", "email": "engineering@legaldispatch.io"},
+    "license": {"name": "Proprietary"},
 }
 
-# Write back
+# ── 4d. Set servers ──────────────────────────────────────
+spec["servers"] = [
+    {"url": "https://api.legaldispatch.dev", "description": "Production"},
+    {"url": "https://api.staging.legaldispatch.dev", "description": "Staging"},
+    {"url": "http://localhost:8080", "description": "Local development (via API gateway)"},
+]
+
+# ── 4e. Set unified security ─────────────────────────────
+spec.setdefault("components", {})["securitySchemes"] = {
+    "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained from POST /api/v1/auth/login. Pass in the Authorization header: Bearer <token>",
+    }
+}
+spec["security"] = [{"BearerAuth": []}]
+
+# ── 4f. Inject canonical shared schemas ──────────────────
+schemas = spec.setdefault("components", {}).setdefault("schemas", {})
+
+schemas["ErrorResponse"] = {
+    "type": "object",
+    "description": "Standard error envelope returned by all endpoints on failure.",
+    "required": ["code", "message", "request_id"],
+    "properties": {
+        "code": {
+            "type": "string",
+            "description": "Machine-readable error code in SCREAMING_SNAKE_CASE.",
+            "example": "ENTITY_NOT_FOUND",
+        },
+        "message": {
+            "type": "string",
+            "description": "Human-readable error description.",
+            "example": "Document not found",
+        },
+        "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Correlation ID from X-Correlation-ID header or generated UUID.",
+            "example": "550e8400-e29b-41d4-a716-446655440000",
+        },
+        "details": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+            "description": "Per-field validation errors. Only present for VALIDATION_ERROR.",
+            "example": {"email": "Email is required"},
+        },
+    },
+}
+
+schemas["PaginationMeta"] = {
+    "type": "object",
+    "description": "Pagination metadata included in paginated list responses.",
+    "required": ["page", "page_size", "total_count", "total_pages"],
+    "properties": {
+        "page": {"type": "integer", "description": "Current page number (1-based).", "example": 1},
+        "page_size": {"type": "integer", "description": "Number of items per page.", "example": 25},
+        "total_count": {"type": "integer", "description": "Total number of items across all pages.", "example": 142},
+        "total_pages": {"type": "integer", "description": "Total number of pages.", "example": 6},
+    },
+}
+
+# ── 4g. Add shared parameters ────────────────────────────
+parameters = spec.setdefault("components", {}).setdefault("parameters", {})
+
+parameters["X-Correlation-ID"] = {
+    "name": "X-Correlation-ID",
+    "in": "header",
+    "required": False,
+    "description": "Request correlation ID for distributed tracing. Generated if not provided.",
+    "schema": {"type": "string", "format": "uuid", "example": "550e8400-e29b-41d4-a716-446655440000"},
+}
+
+parameters["page"] = {
+    "name": "page",
+    "in": "query",
+    "required": False,
+    "description": "Page number (1-based).",
+    "schema": {"type": "integer", "minimum": 1, "default": 1},
+}
+
+parameters["page_size"] = {
+    "name": "page_size",
+    "in": "query",
+    "required": False,
+    "description": "Number of items per page.",
+    "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 25},
+}
+
+# ── Write back ───────────────────────────────────────────
 with open(output_path, "w") as f:
     yaml.dump(spec, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-print(f"  Stripped {stripped_count} internal/infra paths ({original_count} → {len(filtered_paths)})")
+tag_names = [t["name"] for t in spec.get("tags", [])]
+print(f"  Public endpoints: {path_count}")
+print(f"  Tags: {', '.join(tag_names)}")
+print(f"  Shared schemas: ErrorResponse, PaginationMeta")
+print(f"  Shared parameters: X-Correlation-ID, page, page_size")
 PYEOF
 
-# ─── Step 4: Validate merged output ─────────────────────
+# ─── Step 5: Validate merged output ─────────────────────
 info "Validating merged spec..."
 if redocly lint "$OUTPUT" --config "$REPO_ROOT/.redocly.yaml" 2>/dev/null; then
     info "✓ Merged spec is valid"
@@ -151,6 +325,6 @@ else
     warn "Merged spec has lint warnings (non-fatal)"
 fi
 
-# ─── Summary ────────────────────────────────────────────
+# ─── Summary ─────────────────────────────────────────────
 PATHS=$(python3 -c "import yaml; d=yaml.safe_load(open('$OUTPUT')); print(len(d.get('paths',{})))")
 info "Done! $OUTPUT contains $PATHS public endpoints"

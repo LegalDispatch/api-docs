@@ -1,0 +1,43 @@
+name: Merge Specs
+
+on:
+  push:
+    branches: [main, staging, dev]
+    paths:
+      - 'specs/**'
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install redocly
+        run: npm install -g @redocly/cli
+
+      - name: Install Python YAML
+        run: pip install pyyaml
+
+      - name: Run merge script
+        run: |
+          chmod +x scripts/merge-specs.sh
+          ./scripts/merge-specs.sh
+
+      - name: Commit merged spec
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add merged/openapi.yaml
+          if git diff --cached --quiet; then
+            echo "No changes to merged spec"
+          else
+            git commit -m "chore: regenerate merged openapi.yaml"
+            git push
+          fi

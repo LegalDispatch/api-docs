@@ -26,7 +26,19 @@ Then pass the token in all subsequent requests:
 Authorization: Bearer <access_token>
 ```
 
-Tokens expire — use `POST /api/v1/auth/refresh` to rotate before expiry.
+Tokens expire after 15 minutes — use `POST /api/v1/auth/refresh` to rotate before expiry.
+
+## Correlation ID
+
+Include `X-Correlation-ID` in every request for distributed tracing. The API echoes it back and includes it as `request_id` in error responses.
+
+```
+X-Correlation-ID: my-request-123
+```
+
+## JSON Format
+
+All request and response bodies use **`snake_case`** field names. All responses have `Content-Type: application/json`.
 
 ## Interactive Docs
 
@@ -34,8 +46,8 @@ Browse the full API at **`https://api.legaldispatch.dev/docs`** — powered by S
 
 ## Guides
 
-- [Authentication](authentication.md) — Token lifecycle, refresh, logout
-- [Error Handling](error-handling.md) — Error envelope, common error codes
+- [Authentication](authentication.md) — Token lifecycle, JWT claims, refresh, logout, API keys
+- [Error Handling](error-handling.md) — Error envelope shape, all error codes by HTTP status
 - [Pagination](pagination.md) — Query parameters and response metadata
-- [Rate Limiting](rate-limiting.md) — Tiers, headers, retry behavior
+- [Rate Limiting](rate-limiting.md) — IP and user tiers, headers, retry behavior
 - [Changelog](changelog.md) — API changes across releases

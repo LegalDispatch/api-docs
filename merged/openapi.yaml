@@ -3,7 +3,8 @@ info:
   title: LegalDispatch API
   version: 1.0.0
   description: 'Unified API for the LegalDispatch platform. Covers authentication,
-    user management, service of process, document management, and partner operations.
+    user management, service of process, document management, partner operations,
+    and work order operations.
 
 
     All endpoints require a Bearer JWT token unless otherwise noted. Error responses
@@ -38,6 +39,9 @@ tags:
 - name: Partners (Admin)
   description: 'Super-admin partner management: create partners, update status and
     plans.'
+- name: Operations
+  description: Work orders, agent assignment, dispatch, field attempts, deliverables,
+    document packaging, review queue, and ops notes.
 paths:
   /api/v1/auth/login:
     post:
@@ -888,6 +892,1013 @@ paths:
                 code: DOCUMENT_NOT_FOUND
                 message: Document not found
                 request_id: 550e8400-e29b-41d4-a716-446655440000
+  /api/v1/ops/work-orders:
+    get:
+      tags:
+      - Operations
+      summary: List work orders with role-scoped filtering
+      operationId: ops_ListWorkOrders
+      parameters:
+      - name: order_type
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: urgency
+        in: query
+        schema:
+          type: string
+      - name: service_city
+        in: query
+        schema:
+          type: string
+      - name: service_state
+        in: query
+        schema:
+          type: string
+      - name: service_county
+        in: query
+        schema:
+          type: string
+      - name: search
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      - name: offset
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseOfWorkOrderResponse'
+    post:
+      tags:
+      - Operations
+      summary: Create a work order on behalf of a source service
+      operationId: ops_CreateWorkOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkOrderRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}:
+    get:
+      tags:
+      - Operations
+      summary: Get work order detail with source service enrichment
+      operationId: ops_GetWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderDetailResponse'
+    patch:
+      tags:
+      - Operations
+      summary: Update work order urgency, deadline, or instructions
+      operationId: ops_UpdateWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkOrderRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/cancel:
+    post:
+      tags:
+      - Operations
+      summary: Cancel a work order
+      operationId: ops_CancelWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/CancelWorkOrderRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/complete:
+    post:
+      tags:
+      - Operations
+      summary: Mark a work order as completed — triggers billing event
+      operationId: ops_CompleteWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/close:
+    post:
+      tags:
+      - Operations
+      summary: Close a work order after billing is settled
+      operationId: ops_CloseWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/claim:
+    post:
+      tags:
+      - Operations
+      summary: Claim a work order for the current ops user
+      operationId: ops_ClaimWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/release:
+    post:
+      tags:
+      - Operations
+      summary: Release claim on a work order
+      operationId: ops_ReleaseWorkOrder
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/assign-operator:
+    post:
+      tags:
+      - Operations
+      summary: Assign an ops user to manage a work order
+      operationId: ops_AssignOperator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignOperatorRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{id}/override-status:
+    post:
+      tags:
+      - Operations
+      summary: Override work order status with audit trail — requires reason
+      operationId: ops_OverrideWorkOrderStatus
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{workOrderId}/assignment:
+    post:
+      tags:
+      - Operations
+      summary: Assign a field worker to a work order
+      operationId: ops_AssignWorker
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignWorkerEndpointRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+  /api/v1/ops/work-orders/{workOrderId}/assignment/reassign:
+    post:
+      tags:
+      - Operations
+      summary: Reassign a work order to a different field worker
+      operationId: ops_ReassignWorker
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReassignWorkerRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+  /api/v1/ops/work-orders/{workOrderId}/assignment/unassign:
+    post:
+      tags:
+      - Operations
+      summary: Unassign the current field worker from a work order
+      operationId: ops_UnassignWorker
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnassignWorkerEndpointRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+  /api/v1/ops/work-orders/{workOrderId}/assignment/history:
+    get:
+      tags:
+      - Operations
+      summary: Get assignment history for a work order
+      operationId: ops_GetAssignmentHistory
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssignmentResponse'
+  /api/v1/ops/work-orders/bulk-assign:
+    post:
+      tags:
+      - Operations
+      summary: Assign field workers to multiple work orders
+      operationId: ops_BulkAssignWorkers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkAssignEndpointRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkAssignResponse'
+  /api/v1/ops/work-orders/bulk-dispatch:
+    post:
+      tags:
+      - Operations
+      summary: Dispatch multiple work orders to their assigned field workers
+      operationId: ops_BulkDispatchWorkOrders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDispatchRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDispatchResponse'
+  /api/v1/ops/work-orders/{workOrderId}/dispatch:
+    post:
+      tags:
+      - Operations
+      summary: Dispatch a work order to the assigned field worker
+      operationId: ops_DispatchWorkOrder
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/DispatchRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResponse'
+  /api/v1/ops/work-orders/{workOrderId}/attempts:
+    post:
+      tags:
+      - Operations
+      summary: Log a field attempt from the ops portal
+      operationId: ops_LogAttempt
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogAttemptEndpointRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttemptResponse'
+    get:
+      tags:
+      - Operations
+      summary: List all field attempts for a work order
+      operationId: ops_ListAttempts
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttemptResponse'
+  /api/v1/ops/work-orders/{workOrderId}/attempts/{attemptId}:
+    patch:
+      tags:
+      - Operations
+      summary: Amend a field attempt result or notes
+      operationId: ops_AmendAttempt
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: attemptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmendAttemptEndpointRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttemptResponse'
+  /api/v1/ops/workers:
+    get:
+      tags:
+      - Operations
+      summary: Search field workers with local assignment enrichment
+      operationId: ops_SearchWorkers
+      parameters:
+      - name: worker_type
+        in: query
+        schema:
+          type: string
+      - name: state
+        in: query
+        schema:
+          type: string
+      - name: county
+        in: query
+        schema:
+          type: string
+      - name: city
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      - name: offset
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerListResponse'
+  /api/v1/ops/workers/{id}:
+    get:
+      tags:
+      - Operations
+      summary: Get worker detail with active assignment count
+      operationId: ops_GetWorker
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerDetailResponse'
+  /api/v1/ops/work-orders/{workOrderId}/deliverables:
+    post:
+      tags:
+      - Operations
+      summary: Create a deliverable for a work order
+      operationId: ops_CreateDeliverable
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeliverableRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverableResponse'
+    get:
+      tags:
+      - Operations
+      summary: List all deliverables for a work order
+      operationId: ops_ListDeliverables
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliverableResponse'
+  /api/v1/ops/work-orders/{workOrderId}/deliverables/{deliverableId}:
+    patch:
+      tags:
+      - Operations
+      summary: Update a deliverable description or status
+      operationId: ops_UpdateDeliverable
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: deliverableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeliverableRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverableResponse'
+    delete:
+      tags:
+      - Operations
+      summary: Delete a deliverable from a work order
+      operationId: ops_DeleteDeliverable
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: deliverableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No Content
+  /api/v1/ops/work-orders/{workOrderId}/deliverables/{deliverableId}/review:
+    post:
+      tags:
+      - Operations
+      summary: Review a deliverable — approve, reject, or request changes
+      operationId: ops_ReviewDeliverable
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: deliverableId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDeliverableRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverableResponse'
+  /api/v1/ops/work-orders/{workOrderId}/documents:
+    get:
+      tags:
+      - Operations
+      summary: List all documents attached to a work order
+      operationId: ops_ListDocuments
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentResponse'
+    post:
+      tags:
+      - Operations
+      summary: Add a document to a work order
+      operationId: ops_AddDocument
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddDocumentRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+  /api/v1/ops/work-orders/{workOrderId}/documents/arrange:
+    put:
+      tags:
+      - Operations
+      summary: Save the document arrangement for bundle generation
+      operationId: ops_ArrangeDocuments
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArrangeDocumentsRequest'
+        required: true
+      responses:
+        '204':
+          description: No Content
+  /api/v1/ops/work-orders/{workOrderId}/documents/{documentId}:
+    delete:
+      tags:
+      - Operations
+      summary: Remove a document from a work order
+      operationId: ops_RemoveDocument
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: documentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No Content
+  /api/v1/ops/work-orders/{workOrderId}/documents/preview-bundle:
+    post:
+      tags:
+      - Operations
+      summary: Preview the merged document bundle
+      operationId: ops_PreviewBundle
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+  /api/v1/ops/work-orders/{workOrderId}/documents/generate-packet:
+    post:
+      tags:
+      - Operations
+      summary: Generate the final server packet (instruction sheet + bundle)
+      operationId: ops_GeneratePacket
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PacketResponse'
+  /api/v1/ops/review-queue:
+    get:
+      tags:
+      - Operations
+      summary: Get the work order review queue
+      operationId: ops_GetReviewQueue
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      - name: offset
+        in: query
+        schema:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewQueueResponse'
+  /api/v1/ops/review-queue/{workOrderId}/approve:
+    post:
+      tags:
+      - Operations
+      summary: Approve a work order in the review queue
+      operationId: ops_ApproveWorkOrder
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/ReviewActionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/review-queue/{workOrderId}/reject:
+    post:
+      tags:
+      - Operations
+      summary: Reject a work order in the review queue
+      operationId: ops_RejectWorkOrder
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/ReviewActionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/review-queue/{workOrderId}/request-changes:
+    post:
+      tags:
+      - Operations
+      summary: Request changes on a work order in the review queue
+      operationId: ops_RequestChanges
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/ReviewActionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderResponse'
+  /api/v1/ops/work-orders/{workOrderId}/notes:
+    post:
+      tags:
+      - Operations
+      summary: Add an internal ops note to a work order
+      operationId: ops_CreateNote
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+    get:
+      tags:
+      - Operations
+      summary: List all internal ops notes for a work order
+      operationId: ops_ListNotes
+      parameters:
+      - name: workOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NoteResponse'
   /admin/v1/partners:
     post:
       tags:
@@ -3958,6 +4969,945 @@ components:
           type: integer
           format: int64
           example: 245780
+    AddDocumentRequest:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        section:
+          type: string
+        sort_order:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        include_in_bundle:
+          type: boolean
+    AmendAttemptEndpointRequest:
+      type: object
+      properties:
+        result:
+          type: string
+        notes:
+          type:
+          - 'null'
+          - string
+    ArrangeDocumentsRequest:
+      type: object
+      properties:
+        arrangement:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentArrangementItem'
+    AssignmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_order_id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          format: uuid
+        assigned_by:
+          type: string
+          format: uuid
+        assigned_at:
+          type: string
+          format: date-time
+        unassigned_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        unassign_reason:
+          type:
+          - 'null'
+          - string
+        is_active:
+          type: boolean
+    AssignOperatorRequest:
+      type: object
+      properties:
+        ops_user_id:
+          type: string
+          format: uuid
+    AssignWorkerEndpointRequest:
+      type: object
+      properties:
+        worker_id:
+          type: string
+          format: uuid
+    AttemptResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_order_id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          format: uuid
+        attempt_number:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        attempted_at:
+          type: string
+          format: date-time
+        result:
+          type: string
+        gps_latitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        gps_longitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        notes:
+          type:
+          - 'null'
+          - string
+        photo_document_ids:
+          type:
+          - 'null'
+          - array
+          items:
+            type: string
+            format: uuid
+        type_specific_data:
+          type:
+          - 'null'
+          - string
+        entered_by:
+          type: string
+          format: uuid
+        entry_method:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AttemptSummary:
+      type: object
+      properties:
+        ops_attempt_id:
+          type: string
+          format: uuid
+        party_id:
+          type: string
+        location_id:
+          type: string
+        attempt_number:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        attempted_at:
+          type: string
+          format: date-time
+        result:
+          type: string
+        base_result:
+          type: string
+        notes:
+          type:
+          - 'null'
+          - string
+        has_photos:
+          type: boolean
+    BulkAssignEndpointRequest:
+      type: object
+      properties:
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkAssignItem'
+    BulkAssignError:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        error:
+          type: string
+    BulkAssignItem:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          format: uuid
+    BulkAssignResponse:
+      type: object
+      properties:
+        succeeded:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        failed:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkAssignError'
+    BulkDispatchError:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        error:
+          type: string
+    BulkDispatchRequest:
+      type: object
+      properties:
+        work_order_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        dispatch_method:
+          type: string
+    BulkDispatchResponse:
+      type: object
+      properties:
+        succeeded:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        failed:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkDispatchError'
+    CancelWorkOrderRequest:
+      type: object
+      properties:
+        reason:
+          type:
+          - 'null'
+          - string
+    CreateDeliverableRequest:
+      type: object
+      properties:
+        deliverable_type:
+          type: string
+        document_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        description:
+          type:
+          - 'null'
+          - string
+    CreateNoteRequest:
+      type: object
+      properties:
+        note_type:
+          type: string
+        content:
+          type: string
+    CreateWorkOrderRequest:
+      type: object
+      properties:
+        source_order_id:
+          type: string
+          format: uuid
+        order_type:
+          type: string
+        partner_id:
+          type: string
+          format: uuid
+        client_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        case_name:
+          type:
+          - 'null'
+          - string
+        case_number:
+          type:
+          - 'null'
+          - string
+        parties_summary:
+          type:
+          - 'null'
+          - string
+        service_address:
+          type:
+          - 'null'
+          - string
+        service_city:
+          type:
+          - 'null'
+          - string
+        service_state:
+          type:
+          - 'null'
+          - string
+        service_zip:
+          type:
+          - 'null'
+          - string
+        service_county:
+          type:
+          - 'null'
+          - string
+        urgency:
+          type:
+          - 'null'
+          - string
+        deadline:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        instructions:
+          type:
+          - 'null'
+          - string
+    DeliverableResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_order_id:
+          type: string
+          format: uuid
+        deliverable_type:
+          type: string
+        document_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        description:
+          type:
+          - 'null'
+          - string
+        status:
+          type: string
+        reviewed_by:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        reviewed_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DispatchRequest:
+      type: object
+      properties:
+        dispatch_method:
+          type: string
+    DispatchResponse:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        dispatched_at:
+          type: string
+          format: date-time
+    DocumentArrangementItem:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        section:
+          type: string
+        sort_order:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        include_in_bundle:
+          type: boolean
+    DocumentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_order_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        section:
+          type: string
+        sort_order:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        include_in_bundle:
+          type: boolean
+        added_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    InternalCancelWorkOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        cancelled_at:
+          type: string
+          format: date-time
+    InternalCreateWorkOrderRequest:
+      type: object
+      properties:
+        order_type:
+          type: string
+        source_service:
+          type: string
+        source_order_id:
+          type: string
+          format: uuid
+        work_order_number:
+          type: string
+        partner_id:
+          type: string
+          format: uuid
+        urgency:
+          type: string
+        deadline:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        target:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkOrderTarget'
+        documents_to_serve:
+          type:
+          - 'null'
+          - array
+          items:
+            type: string
+    InternalLogAttemptRequest:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          format: uuid
+        attempted_at:
+          type: string
+          format: date-time
+        result:
+          type: string
+        gps_latitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        gps_longitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        notes:
+          type:
+          - 'null'
+          - string
+        photo_document_ids:
+          type:
+          - 'null'
+          - array
+          items:
+            type: string
+            format: uuid
+        type_specific_data:
+          type:
+          - 'null'
+          - string
+    LogAttemptEndpointRequest:
+      type: object
+      properties:
+        worker_id:
+          type: string
+          format: uuid
+        attempted_at:
+          type: string
+          format: date-time
+        result:
+          type: string
+        gps_latitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        gps_longitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        notes:
+          type:
+          - 'null'
+          - string
+        photo_document_ids:
+          type:
+          - 'null'
+          - array
+          items:
+            type: string
+            format: uuid
+        type_specific_data:
+          type:
+          - 'null'
+          - string
+        entry_method:
+          type: string
+    NoteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        work_order_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        note_type:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    OverrideStatusRequest:
+      type: object
+      properties:
+        target_status:
+          type: string
+        reason:
+          type: string
+    PacketResponse:
+      type: object
+      properties:
+        work_order_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        signed_url:
+          type: string
+    PaginatedResponseOfWorkOrderResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderResponse'
+        total:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        limit:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        offset:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    ReassignWorkerRequest:
+      type: object
+      properties:
+        new_worker_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    ReviewActionRequest:
+      type: object
+      properties:
+        action:
+          type: string
+        notes:
+          type:
+          - 'null'
+          - string
+    ReviewDeliverableRequest:
+      type: object
+      properties:
+        status:
+          type: string
+    ReviewQueueItem:
+      type: object
+      properties:
+        work_order:
+          $ref: '#/components/schemas/WorkOrderResponse'
+        deliverable_count:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+        attempt_count:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    ReviewQueueResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewQueueItem'
+        total:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    UnassignWorkerEndpointRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    UpdateDeliverableRequest:
+      type: object
+      properties:
+        description:
+          type:
+          - 'null'
+          - string
+        status:
+          type:
+          - 'null'
+          - string
+    UpdateWorkOrderRequest:
+      type: object
+      properties:
+        urgency:
+          type:
+          - 'null'
+          - string
+        deadline:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        instructions:
+          type:
+          - 'null'
+          - string
+    WorkerDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type:
+          - 'null'
+          - string
+        phone:
+          type:
+          - 'null'
+          - string
+        status:
+          type:
+          - 'null'
+          - string
+        service_areas:
+          type: array
+          items:
+            type: string
+        active_assignments:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    WorkerListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkerDetailResponse'
+        total:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    WorkOrderDetailResponse:
+      type: object
+      properties:
+        work_order:
+          $ref: '#/components/schemas/WorkOrderResponse'
+        source_detail: {}
+    WorkOrderPartyLocation:
+      type: object
+      properties:
+        location_id:
+          type: string
+        type:
+          type: string
+        address:
+          type: string
+        priority:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+          - integer
+          - string
+          format: int32
+    WorkOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_order_id:
+          type: string
+          format: uuid
+        order_type:
+          type: string
+        work_order_number:
+          type: string
+        partner_id:
+          type: string
+          format: uuid
+        client_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        case_name:
+          type:
+          - 'null'
+          - string
+        case_number:
+          type:
+          - 'null'
+          - string
+        parties_summary:
+          type:
+          - 'null'
+          - string
+        service_address:
+          type:
+          - 'null'
+          - string
+        service_city:
+          type:
+          - 'null'
+          - string
+        service_state:
+          type:
+          - 'null'
+          - string
+        service_zip:
+          type:
+          - 'null'
+          - string
+        service_county:
+          type:
+          - 'null'
+          - string
+        service_latitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        service_longitude:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?$
+          type:
+          - 'null'
+          - number
+          - string
+          format: double
+        received_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        source_summary:
+          type:
+          - 'null'
+          - string
+        status:
+          type: string
+        urgency:
+          type: string
+        deadline:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        instructions:
+          type:
+          - 'null'
+          - string
+        ops_user_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        assigned_worker_id:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        assigned_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        dispatched_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        completed_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        closed_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        review_status:
+          type:
+          - 'null'
+          - string
+        reviewed_by:
+          type:
+          - 'null'
+          - string
+          format: uuid
+        reviewed_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        attempts:
+          type:
+          - 'null'
+          - array
+          items:
+            $ref: '#/components/schemas/AttemptSummary'
+    WorkOrderTarget:
+      type: object
+      properties:
+        type:
+          type: string
+        parties:
+          type:
+          - 'null'
+          - array
+          items:
+            $ref: '#/components/schemas/WorkOrderTargetParty'
+    WorkOrderTargetParty:
+      type: object
+      properties:
+        party_id:
+          type: string
+        name:
+          type: string
+        locations:
+          type:
+          - 'null'
+          - array
+          items:
+            $ref: '#/components/schemas/WorkOrderPartyLocation'
     CreatePartnerRequest:
       type: object
       description: Request body for creating a new partner organization.
@@ -8053,6 +10003,17 @@ x-tagGroups:
 - name: Document Service API
   tags:
   - Documents
+- name: LegalDispatch Operations Service API
+  tags:
+  - Work Orders
+  - Assignment
+  - Dispatch
+  - Field Attempts
+  - Workers
+  - Deliverables
+  - Documents & Packaging
+  - Review Queue
+  - Ops Notes
 - name: Partner Management Service API
   tags:
   - Admin

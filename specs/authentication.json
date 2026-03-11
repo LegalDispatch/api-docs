@@ -1,8 +1,8 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.1",
   "info": {
     "title": "LegalDispatch Authentication Service API",
-    "description": "Credential validation, JWT issuance, refresh token rotation, API key management,\nand session lifecycle for the LegalDispatch platform.\n\n## Authentication Model\n- **Public endpoints** — no authentication required\n- **Authenticated endpoints** — `Authorization: Bearer <access_token>`\n- **Internal endpoints** — `X-Internal-Token: <shared_secret>` (service-to-service only)\n\n## Response Format\nAll responses use **snake_case** JSON serialization. Error responses follow the\nstandard envelope: `{ \"code\": \"CODE\", \"message\": \"...\", \"details\": {...}, \"request_id\": \"...\" }`.",
+    "description": "Credential validation, JWT issuance, refresh token rotation, API key management,\nand session lifecycle for the LegalDispatch platform.\n\n## Authentication Model\n- **Public endpoints** — no authentication required\n- **Authenticated endpoints** — `Authorization: Bearer <access_token>`\n\n## Response Format\nAll responses use **snake_case** JSON serialization. Error responses follow the\nstandard envelope: `{ \"code\": \"CODE\", \"message\": \"...\", \"details\": {...}, \"request_id\": \"...\" }`.",
     "contact": {
       "name": "LegalDispatch Engineering",
       "email": "engineering@legaldispatch.io"
@@ -13,49 +13,6 @@
     "version": "v1"
   },
   "paths": {
-    "/health": {
-      "get": {
-        "tags": [
-          "Health"
-        ],
-        "summary": "Liveness probe",
-        "description": "Returns **200 OK** if the process is running.\nDoes not verify downstream dependencies — use `/ready` for that.",
-        "operationId": "Liveness",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ready": {
-      "get": {
-        "tags": [
-          "Health"
-        ],
-        "summary": "Readiness probe",
-        "description": "Checks all critical dependencies and returns **200** only when the primary\ndatabase is reachable and the JWT signing key is loaded.\n\n- **Cache** and **event bus** are reported but non-critical — the service\n  degrades gracefully if they are temporarily unavailable.\n- **User Service** and **Partner Service** downstream health is reported\n  but does not block readiness.\n- Each dependency check has a **5-second timeout** — a timed-out check\n  reports `\"timeout\"` instead of `\"disconnected\"`.\n- Returns **503** when a critical dependency is unreachable.",
-        "operationId": "Readiness",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": { }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable"
-          }
-        }
-      }
-    },
     "/api/v1/auth/login": {
       "post": {
         "tags": [
@@ -63,7 +20,7 @@
         ],
         "summary": "Authenticate with email and password",
         "description": "Password-based login endpoint. Returns JWT tokens directly for single-account users,\nor a partner selector session for multi-account users.\n\n**Flow:**\n1. Check brute-force lockout (Redis)\n2. Look up credential by email\n3. Verify password (Argon2id)\n4. Rehash if parameters changed (transparent upgrade)\n5. Reset failed attempt counter\n6. Resolve user accounts (User Service)\n7. If **multiple accounts** → return `step: \"select_partner\"` with a temporary session token\n8. If **single account** → return `step: \"complete\"` with JWT access/refresh tokens\n\nThe `partner_id` field is optional — set by the API Gateway when login originates\nfrom a partner's custom domain, bypassing multi-account resolution.",
-        "operationId": "Login",
+        "operationId": "auth_Login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -104,7 +61,7 @@
         ],
         "summary": "Complete multi-account login by selecting a partner",
         "description": "Called after `POST /login` returns `step: \"select_partner\"`. Takes the temporary\nsession token and the selected `partner_id` from the accounts list, then issues\nJWT access and refresh tokens for that partner context.\n\nThe session token is **single-use** and expires after **5 minutes**.\n\n**Error codes:**\n- `INVALID_TOKEN_FORMAT` — malformed or unrecognized session token\n- `TOKEN_EXPIRED` — session token has expired (5-min TTL)\n- `TOKEN_REVOKED` — session token already consumed\n- `ACCOUNT_INACTIVE` — selected account is not active\n- `PARTNER_SUSPENDED` — selected partner is suspended",
-        "operationId": "SelectPartner",
+        "operationId": "auth_SelectPartner",
         "requestBody": {
           "content": {
             "application/json": {
@@ -145,7 +102,7 @@
         ],
         "summary": "Exchange a refresh token for a new token pair",
         "description": "Rotates a valid refresh token: the old token is immediately marked as **used**\nand a new access token + refresh token pair is issued.\n\nThe Auth Service fetches a **fresh auth context** from the User Service on every\nrefresh, so role and permission changes take effect without re-login.\n\n**Rotation flow:**\n1. Hash the presented refresh token (SHA-256)\n2. Look up token by hash\n3. If status = `used` → **theft detected**: revoke entire token family, publish `TokenReuseDetected`\n4. If status = `revoked` or expired → reject\n5. Mark current token as `used`\n6. Fetch fresh auth context from User Service\n7. Update session `last_active_at`\n8. Issue new refresh token (same `family_id`, `parent_token_id` = current)\n9. Build new JWT with fresh auth context\n10. Return new token pair\n\n**Token reuse detection:** If a token that was already consumed is presented again,\nthe entire token family (all tokens from the same login) is revoked as a security\nmeasure. This covers the scenario where an attacker steals a refresh token but the\nlegitimate user has already refreshed.",
-        "operationId": "RefreshToken",
+        "operationId": "auth_RefreshToken",
         "requestBody": {
           "content": {
             "application/json": {
@@ -183,7 +140,7 @@
         ],
         "summary": "Revoke the current session (single-device logout)",
         "description": "Revokes the refresh token and its associated session. Logs out the current\ndevice only — other active sessions are unaffected.\n\n**Side effects:**\n- The refresh token is marked as `revoked`\n- The associated session is marked as `revoked`\n- A `UserLoggedOut` event is published\n\nRequires a valid JWT in the `Authorization` header (forwarded by the API Gateway\nvia `X-User-Claims`).",
-        "operationId": "Logout",
+        "operationId": "auth_Logout",
         "requestBody": {
           "content": {
             "application/json": {
@@ -221,7 +178,7 @@
         ],
         "summary": "Revoke all sessions across all devices",
         "description": "Revokes **all** active sessions and refresh tokens for the authenticated user.\nRequires **password confirmation** for security — prevents session hijacking\nfrom cascading across devices.\n\n**Side effects:**\n- All active sessions for the user are marked as `revoked`\n- All active refresh tokens for the user are revoked\n- An `AllSessionsRevoked` event is published\n\n**Error codes:**\n- `INVALID_CREDENTIALS` — password confirmation failed",
-        "operationId": "LogoutAll",
+        "operationId": "auth_LogoutAll",
         "requestBody": {
           "content": {
             "application/json": {
@@ -259,7 +216,7 @@
         ],
         "summary": "Request a password reset email",
         "description": "Initiates the forgot-password flow. **Always returns 200** regardless of whether\nthe email exists — this prevents email enumeration attacks.\n\n**Internal flow:**\n1. Look up credential by email\n2. If not found → return 200 (no email sent, no error)\n3. Generate 256-bit random reset token\n4. Store SHA-256 hash in `password_reset_tokens` (1-hour TTL)\n5. Call Notification Service to send reset email with token\n6. Return 200\n\n**Rate limits:** 3/hour per email, 10/hour per IP.",
-        "operationId": "RequestPasswordReset",
+        "operationId": "auth_RequestPasswordReset",
         "requestBody": {
           "content": {
             "application/json": {
@@ -294,7 +251,7 @@
         ],
         "summary": "Reset password using a token from the reset email",
         "description": "Resets the user's password using a single-use token from the reset email.\nThe token has a **1-hour TTL** and cannot be reused.\n\n**Side effects:**\n- Password hash updated with Argon2id\n- All active sessions revoked\n- All active refresh tokens revoked\n- Password added to history (last 5 hashes retained)\n- `must_change_password` flag cleared\n- `PasswordReset` event published\n\n**Password policy:** Minimum 12 chars, uppercase, lowercase, digit, special character,\nno email username, no reuse of last 5 passwords.\n\n**Error codes:**\n- `PASSWORD_TOO_WEAK` — new password doesn't meet policy\n- `TOKEN_EXPIRED` — reset token past its 1-hour TTL\n- `TOKEN_REVOKED` — reset token already consumed\n- `INVALID_TOKEN_FORMAT` — malformed reset token",
-        "operationId": "ResetPassword",
+        "operationId": "auth_ResetPassword",
         "requestBody": {
           "content": {
             "application/json": {
@@ -332,7 +289,7 @@
         ],
         "summary": "Change password for the currently authenticated user",
         "description": "Changes the password for the authenticated user. Requires the **current password**\nfor verification.\n\nOptionally invalidates all other active sessions (except the current one) by setting\n`invalidate_other_sessions: true`.\n\n**Side effects:**\n- Password hash updated with Argon2id\n- Password added to history (last 5 hashes)\n- `must_change_password` flag cleared\n- If `invalidate_other_sessions: true`, all other sessions + refresh tokens revoked\n- `PasswordChanged` event published\n- All partner accounts sharing this email credential are affected\n\n**Error codes:**\n- `INVALID_CREDENTIALS` — current password verification failed\n- `PASSWORD_TOO_WEAK` — new password doesn't meet policy",
-        "operationId": "ChangePassword",
+        "operationId": "auth_ChangePassword",
         "requestBody": {
           "content": {
             "application/json": {
@@ -349,7 +306,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangePasswordResponse"
+                  "$ref": "#/components/schemas/AuthChangePasswordResponse"
                 }
               }
             }
@@ -370,7 +327,7 @@
         ],
         "summary": "List all active sessions for the current user",
         "description": "Returns all **active** sessions for the authenticated user, including device\nmetadata, IP address, geo-location, and activity timestamps.\n\nEach session includes an `is_current` flag indicating whether it corresponds\nto the session making this request (matched via the `session_id` JWT claim).\n\nSessions are returned in most-recently-active-first order.\n\n**Use cases:**\n- Display a \"Your devices\" page in the UI\n- Allow users to identify and revoke unfamiliar sessions",
-        "operationId": "ListSessions",
+        "operationId": "auth_ListSessions",
         "responses": {
           "200": {
             "description": "OK",
@@ -395,7 +352,7 @@
         ],
         "summary": "Revoke a specific session (log out that device)",
         "description": "Revokes a specific session by ID, logging out that device. Users can only\nrevoke their own sessions — attempting to revoke another user's session\nreturns `403 INSUFFICIENT_PERMISSIONS`.\n\n**Side effects:**\n- Session marked as `revoked` with `revoked_reason: \"user_requested\"`\n- All refresh tokens for the session are revoked\n- `UserLoggedOut` event published with `logout_type: \"single\"`\n\n**Error codes:**\n- `SESSION_NOT_FOUND` — session ID does not exist\n- `INSUFFICIENT_PERMISSIONS` — attempting to revoke another user's session",
-        "operationId": "RevokeSession",
+        "operationId": "auth_RevokeSession",
         "parameters": [
           {
             "name": "sessionId",
@@ -437,7 +394,7 @@
         ],
         "summary": "Create a new API key for the current partner",
         "description": "Creates a new API key for the authenticated user's partner. The **full key is\nreturned only once** in the response — it cannot be retrieved again.\n\nThe key is stored as a SHA-256 hash; the raw key is never persisted.\n\n**Required role:** `partner_admin`\n\n**Request fields:**\n- `name` — human-readable key name (e.g., \"Filing Integration - Production\")\n- `environment` — `live` or `test`\n- `permissions` — array of permission strings to grant\n- `ip_allowlist` — optional CIDR ranges for IP restriction (null = any IP)\n- `rate_limit_override` — optional custom rate limits (null = partner default)\n\n**Side effects:**\n- API key record created with SHA-256 hash\n- `ApiKeyCreated` event published to RabbitMQ",
-        "operationId": "CreateApiKey",
+        "operationId": "auth_CreateApiKey",
         "requestBody": {
           "content": {
             "application/json": {
@@ -476,7 +433,7 @@
         ],
         "summary": "List all API keys for the current partner",
         "description": "Returns all API keys for the authenticated user's partner. Keys are shown\nas **prefixes only** — the full key is never returned after creation.\n\n**Required role:** `partner_admin`\n\nEach key includes:\n- `key_prefix` — first 16 characters for identification\n- `status` — `active`, `deprecated`, `revoked`, or `suspended`\n- `last_used_at` — last successful API call timestamp\n- `total_requests` — cumulative API call count\n- `permissions` — granted permission strings\n- `ip_allowlist` — IP restrictions (null = unrestricted)\n\nKeys are returned in newest-first order.",
-        "operationId": "ListApiKeys",
+        "operationId": "auth_ListApiKeys",
         "responses": {
           "200": {
             "description": "OK",
@@ -504,7 +461,7 @@
         ],
         "summary": "Revoke an API key immediately",
         "description": "Immediately revokes an API key. The key stops working as soon as this call\ncompletes. Users can only revoke keys belonging to their own partner.\n\n**Required role:** `partner_admin`\n\n**Side effects:**\n- API key status set to `revoked`\n- Cache invalidated for this key hash\n- `ApiKeyRevoked` event published with `reason: \"manual\"`\n\n**Error codes:**\n- `INVALID_API_KEY` — key ID does not exist\n- `INSUFFICIENT_PERMISSIONS` — key belongs to a different partner\n- `KEY_REVOKED` — key is already revoked",
-        "operationId": "RevokeApiKey",
+        "operationId": "auth_RevokeApiKey",
         "parameters": [
           {
             "name": "keyId",
@@ -543,7 +500,7 @@
         ],
         "summary": "Rotate an API key with a grace period",
         "description": "Creates a new API key and deprecates the old one. The old key remains valid\nfor a configurable **grace period** (default: 24 hours) to allow migration.\n\n**Required role:** `partner_admin`\n\nThe new key inherits the same name, permissions, environment, IP allowlist,\nand rate limits from the old key.\n\n**Request fields:**\n- `grace_period_hours` — hours the old key remains valid (default: 24)\n\n**Rotation flow:**\n1. Old key status → `deprecated` with `deprecated_expires_at`\n2. New key created with same configuration\n3. Both keys work during the grace period\n4. After grace period, old key automatically expires\n\n**Side effects:**\n- New API key created (SHA-256 hash stored)\n- Old key cache invalidated\n- `ApiKeyCreated` event published for the new key\n\n**Error codes:**\n- `INVALID_API_KEY` — key ID does not exist\n- `INSUFFICIENT_PERMISSIONS` — key belongs to a different partner\n- `VALIDATION_ERROR` — key is not in `active` status (only active keys can be rotated)",
-        "operationId": "RotateApiKey",
+        "operationId": "auth_RotateApiKey",
         "parameters": [
           {
             "name": "keyId",
@@ -595,7 +552,7 @@
         ],
         "summary": "Get JSON Web Key Set for JWT verification",
         "description": "Returns the JSON Web Key Set (JWKS) containing the RSA public keys used to\nverify JWT access tokens issued by this service.\n\n**Authentication:** None — this endpoint is public.\n\n**Caching:** The response includes `Cache-Control: public, max-age=3600` to\nallow aggressive caching by the API Gateway and downstream services.\n\n**Key rotation:**\n- JWT signing keys are rotated every **90 days**\n- During rotation, both the **current** and **previous** key are included\n- Old keys are removed from the JWKS 24 hours after rotation\n- Tokens signed with either key remain valid during the overlap period\n\n**Response fields:**\n- `keys[].kty` — always `RSA`\n- `keys[].use` — always `sig` (signature verification)\n- `keys[].alg` — always `RS256`\n- `keys[].kid` — key identifier matching the JWT `kid` header\n- `keys[].n` — RSA modulus (Base64url encoded)\n- `keys[].e` — RSA exponent (Base64url encoded)",
-        "operationId": "GetJwks",
+        "operationId": "auth_GetJwks",
         "responses": {
           "200": {
             "description": "OK",
@@ -603,276 +560,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JwksResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/credentials/create": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Create a credential record for a new user",
-        "description": "Called by **User Account Service** during user registration. Hashes the raw password\nwith Argon2id and creates a credential record. If a credential already exists for the\nsame email (credential sharing across partners), the existing credential is returned\nwithout modification.\n\n**Validation:** Either `raw_password` or `password_hash` must be provided, not both.\nWhen `raw_password` is provided, it is validated against the password policy before hashing.",
-        "operationId": "InternalCreateCredential",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCredentialRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateCredentialResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/internal/credentials/invalidate-all": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Revoke all sessions and refresh tokens for a user",
-        "description": "Called by **User Account Service** on user deactivation or admin-initiated password\nreset. Revokes all active sessions and refresh tokens for the specified user.\nPublishes an `AllSessionsRevoked` event.\n\nAPI keys are **not** revoked — they are partner-scoped, not user-scoped.",
-        "operationId": "InternalInvalidateAll",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InvalidateAllRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidateAllResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/internal/credentials/change-password": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Change a user's password (internal, no current password required)",
-        "description": "Called by **User Account Service** for admin-initiated password changes or\nforced password rotations. Unlike the public password change endpoint, this does\nnot require the current password. The new password is validated against the password\npolicy, checked against HaveIBeenPwned, hashed with Argon2id, and stored.\nAll active sessions are invalidated after the change.\nPublishes a `PasswordChanged` event.",
-        "operationId": "InternalChangePassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InternalChangePasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InternalChangePasswordResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        }
-      }
-    },
-    "/internal/credentials/invalidate-partner": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Revoke all sessions and suspend API keys for a partner",
-        "description": "Called by **User Account Service** on partner suspension. Revokes all active sessions\nand refresh tokens for all users at the partner, and sets all partner API keys to\n`suspended` status. Publishes a `PartnerSessionsRevoked` event.\n\nThe canonical suspension path is:\nPMS → `PartnerStatusChanged` → UAS → marks users `access_suspended` → UAS → calls this endpoint.",
-        "operationId": "InternalInvalidatePartner",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InvalidatePartnerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidatePartnerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/internal/invite-token/validate": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Validate an invitation token",
-        "description": "Called by **User Account Service** during registration to verify an invitation token\nbefore allowing signup. Returns the token metadata if valid, or the reason for\ninvalidity (`TOKEN_EXPIRED`, `TOKEN_USED`, `TOKEN_REVOKED`, `TOKEN_NOT_FOUND`).",
-        "operationId": "InternalValidateInviteToken",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateInviteTokenRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidateInviteTokenResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/internal/jwks": {
-      "get": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Get JSON Web Key Set (internal)",
-        "description": "Called by **API Gateway Service** to cache public keys for JWT validation.\nReturns the same JWKS data as the public `GET /api/v1/auth/.well-known/jwks.json` endpoint.",
-        "operationId": "InternalGetJwks",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JwksResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/internal/validate-api-key": {
-      "post": {
-        "tags": [
-          "Internal"
-        ],
-        "summary": "Validate an API key and return partner context",
-        "description": "Called by **API Gateway Service** for requests bearing `Authorization: ApiKey ldk_live_...`.\nValidates the key via hash lookup + IP allowlist check + partner active check.\nReturns partner context and permissions on success, or a reason code on failure.\n\n**Validation flow:**\n1. SHA-256 hash → HybridCache check → DB fallback\n2. Status check (active/deprecated within grace)\n3. IP allowlist enforcement\n4. Partner active verification\n5. Usage recording (fire-and-forget)",
-        "operationId": "InternalValidateApiKey",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateApiKeyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidateApiKeyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidateApiKeyResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidateApiKeyResponse"
                 }
               }
             }
@@ -887,70 +574,96 @@
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User ID at this partner."
           },
           "partner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Partner identifier."
           },
           "partner_name": {
-            "type": "string"
+            "type": "string",
+            "description": "Partner display name."
           },
           "role": {
-            "type": "string"
+            "type": "string",
+            "description": "User's role at this partner."
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Account lifecycle status (e.g., `active`, `deactivated`)."
           }
-        }
+        },
+        "description": "Partner account summary returned in the multi-account selector response."
       },
       "ApiKeyInfo": {
         "type": "object",
         "properties": {
           "api_key_id": {
-            "type": "string"
+            "type": "string",
+            "description": "API key identifier (UUID)."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable key name."
           },
           "key_prefix": {
-            "type": "string"
+            "type": "string",
+            "description": "First 16 characters for identification (no full key)."
           },
           "environment": {
-            "type": "string"
+            "type": "string",
+            "description": "Target environment: `live` or `test`."
           },
           "permissions": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Granted permission strings."
           },
           "ip_allowlist": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             },
-            "nullable": true
+            "description": "IP restrictions, or null if unrestricted."
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Key lifecycle status (see ApiKeyStatus)."
           },
           "last_used_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Last successful API call timestamp, or null if never used.",
+            "format": "date-time"
           },
           "total_requests": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Total API calls made with this key.",
             "format": "int64"
           },
           "created_at": {
             "type": "string",
+            "description": "Creation timestamp (ISO 8601 UTC).",
             "format": "date-time"
           },
           "created_by": {
-            "type": "string"
+            "type": "string",
+            "description": "User who created the key (UUID)."
           }
-        }
+        },
+        "description": "Individual API key summary returned in ApiKeyListResponse.\nThe full key is never included — only the string ApiKeyInfo.KeyPrefix."
       },
       "ApiKeyListResponse": {
         "type": "object",
@@ -959,290 +672,442 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ApiKeyInfo"
-            }
+            },
+            "description": "API keys for the partner, ordered by creation date (newest first)."
           }
-        }
+        },
+        "description": "Response for `GET /api/v1/auth/api-keys`.\nContains all API keys for the current partner (prefix only, no full keys)."
+      },
+      "AuthChangePasswordResponse": {
+        "type": "object",
+        "properties": {
+          "password_changed": {
+            "type": "boolean",
+            "description": "Always `true` on success."
+          },
+          "sessions_invalidated": {
+            "type": "boolean",
+            "description": "Whether other active sessions were revoked."
+          }
+        },
+        "description": "Response for `POST /api/v1/auth/password/change`.\nConfirms the password was changed and whether sessions were invalidated."
       },
       "ChangePasswordDto": {
         "type": "object",
         "properties": {
           "current_password": {
-            "type": "string"
+            "type": "string",
+            "description": "Current password for verification."
           },
           "new_password": {
-            "type": "string"
+            "type": "string",
+            "description": "New password — must satisfy the platform password policy."
           },
           "invalidate_other_sessions": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "If `true`, all other active sessions (except the current one) are revoked.\nDefaults to `false`."
           }
-        }
-      },
-      "ChangePasswordResponse": {
-        "type": "object",
-        "properties": {
-          "password_changed": {
-            "type": "boolean"
-          },
-          "sessions_invalidated": {
-            "type": "boolean"
-          }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/password/change`.\nChanges the password for the currently authenticated user."
       },
       "CreateApiKeyRequest": {
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable name for the key (e.g., `Filing Integration - Production`)."
           },
           "environment": {
-            "type": "string"
+            "type": "string",
+            "description": "Target environment: `live` or `test` (see ApiKeyEnvironment)."
           },
           "permissions": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Array of permission strings to grant (e.g., `[\"filing.create\", \"filing.view\"]`)."
           },
           "ip_allowlist": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             },
-            "nullable": true
+            "description": "Optional CIDR ranges for IP restriction. Null means any IP is permitted."
           },
           "rate_limit_override": {
-            "$ref": "#/components/schemas/RateLimitOverride"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Optional custom rate limit override. Null uses the partner default.",
+                "$ref": "#/components/schemas/RateLimitOverride"
+              }
+            ]
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/api-keys`.\nCreates a new API key for the current partner."
       },
       "CreateApiKeyResponse": {
         "type": "object",
         "properties": {
           "api_key_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Created API key identifier (UUID)."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable key name."
           },
           "key": {
-            "type": "string"
+            "type": "string",
+            "description": "Full API key — <b>shown only once, never stored</b>."
           },
           "key_prefix": {
-            "type": "string"
+            "type": "string",
+            "description": "First 16 characters of the key for identification in listings."
           },
           "environment": {
-            "type": "string"
+            "type": "string",
+            "description": "Target environment: `live` or `test`."
           },
           "permissions": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Granted permission strings."
           },
           "ip_allowlist": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             },
-            "nullable": true
+            "description": "IP restrictions, or null if unrestricted."
           },
           "partner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Owning partner identifier."
           },
           "created_at": {
             "type": "string",
+            "description": "Creation timestamp (ISO 8601 UTC).",
             "format": "date-time"
           },
           "created_by": {
-            "type": "string"
+            "type": "string",
+            "description": "User who created the key."
           },
           "warning": {
-            "type": "string"
+            "type": "string",
+            "description": "Security reminder: `Store this key securely. It will not be shown again.`"
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/api-keys`.\nContains the full API key — shown only once, never again."
       },
       "CreateCredentialRequest": {
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User ID from the User Account Service (UUID string)."
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "description": "Email address — becomes the unique credential key (case-insensitive)."
           },
           "password_hash": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Pre-hashed password; null when string? CreateCredentialRequest.RawPassword is provided instead.\nMutually exclusive with string? CreateCredentialRequest.RawPassword — exactly one must be non-null."
           },
           "raw_password": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Plain-text password to be hashed by this service via Argon2id.\nMutually exclusive with string? CreateCredentialRequest.PasswordHash — exactly one must be non-null."
           },
           "require_email_verification": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether to require email verification before the user can log in."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/credentials/create`.\nCalled by the User Account Service during user registration to create or reuse a credential record."
       },
       "CreateCredentialResponse": {
         "type": "object",
         "properties": {
           "credential_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Created or existing credential identifier (UUID)."
           },
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User ID that owns the credential."
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "description": "Email address associated with the credential."
           },
           "password_set": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the password was successfully hashed and stored."
           },
           "email_verified": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Initial email verification state (`false` when verification is required)."
           }
-        }
+        },
+        "description": "Response for `POST /internal/credentials/create`.\nConfirms the credential was created (or an existing one was shared)."
       },
       "DeviceInfoDto": {
         "type": "object",
         "properties": {
           "device_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Client-generated device identifier (persisted across sessions)."
           },
           "device_name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Human-readable device description (e.g., \"Chrome on MacBook Pro\")."
           },
           "platform": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Platform: `web`, `ios`, `android`, or `api`."
           }
         },
-        "nullable": true
+        "description": "Client device metadata attached to the login request for session tracking."
+      },
+      "ErrorResponse": {
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code in SCREAMING_SNAKE_CASE"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error description"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Correlation ID from X-Correlation-ID header",
+            "format": "uuid"
+          },
+          "details": {
+            "type": "object",
+            "description": "Optional validation error details"
+          }
+        }
       },
       "InternalChangePasswordRequest": {
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User whose password is being changed (UUID string)."
           },
           "new_password": {
-            "type": "string"
+            "type": "string",
+            "description": "New plain-text password (hashed by this service via Argon2id)."
           },
           "initiated_by": {
-            "type": "string"
+            "type": "string",
+            "description": "User or service that initiated the password change (UUID string or service name)."
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "Machine-readable reason for the change (e.g., `admin_reset`, `forced_rotation`).\nRecorded for audit purposes."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/credentials/change-password`.\nCalled by the User Account Service for admin-initiated or programmatic password changes.\nUnlike the public password change endpoint, this does not require the current password."
       },
       "InternalChangePasswordResponse": {
         "type": "object",
         "properties": {
           "password_changed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the password was successfully changed."
           },
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Affected user identifier."
           },
           "sessions_invalidated": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of sessions invalidated after the password change.",
             "format": "int32"
           }
-        }
+        },
+        "description": "Response for `POST /internal/credentials/change-password`.\nConfirms the password was changed and sessions were invalidated."
       },
       "InvalidateAllRequest": {
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User whose sessions and tokens to invalidate (UUID string)."
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "Reason for invalidation (e.g., `user_deactivated`, `admin_password_reset`).\nRecorded on each revoked session and token for audit."
           },
           "initiated_by": {
-            "type": "string"
+            "type": "string",
+            "description": "User or service that initiated the action (UUID string or service name)."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/credentials/invalidate-all`.\nCalled by the User Account Service on user deactivation or admin-initiated password reset."
       },
       "InvalidateAllResponse": {
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Affected user identifier."
           },
           "sessions_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of active sessions that were revoked.",
             "format": "int32"
           },
           "refresh_tokens_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of active refresh tokens that were revoked.",
             "format": "int32"
           },
           "api_keys_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of API keys revoked (always 0 — keys are partner-scoped, not user-scoped).",
             "format": "int32"
           }
-        }
+        },
+        "description": "Response for `POST /internal/credentials/invalidate-all`.\nReturns counts of revoked sessions, tokens, and API keys."
       },
       "InvalidatePartnerRequest": {
         "type": "object",
         "properties": {
           "partner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Partner whose sessions and keys to invalidate (UUID string)."
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "Reason for invalidation (e.g., `partner_suspended`)."
           },
           "initiated_by": {
-            "type": "string"
+            "type": "string",
+            "description": "User or service that initiated the action."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/credentials/invalidate-partner`.\nCalled by the User Account Service on partner suspension to revoke all sessions and suspend API keys."
       },
       "InvalidatePartnerResponse": {
         "type": "object",
         "properties": {
           "partner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Affected partner identifier."
           },
           "sessions_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of sessions revoked across all users at this partner.",
             "format": "int32"
           },
           "refresh_tokens_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of refresh tokens revoked for this partner.",
             "format": "int32"
           },
           "api_keys_suspended": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of API keys set to `suspended` status.",
             "format": "int32"
           }
-        }
+        },
+        "description": "Response for `POST /internal/credentials/invalidate-partner`.\nReturns counts of affected entities."
       },
       "JsonWebKeyDto": {
         "type": "object",
         "properties": {
           "kty": {
-            "type": "string"
+            "type": "string",
+            "description": "Key type — always `RSA`."
           },
           "use": {
-            "type": "string"
+            "type": "string",
+            "description": "Key usage — always `sig` (signature verification)."
           },
           "alg": {
-            "type": "string"
+            "type": "string",
+            "description": "Algorithm — always `RS256`."
           },
           "kid": {
-            "type": "string"
+            "type": "string",
+            "description": "Key identifier matching the `kid` header in issued JWTs."
           },
           "n": {
-            "type": "string"
+            "type": "string",
+            "description": "RSA modulus (Base64url encoded)."
           },
           "e": {
-            "type": "string"
+            "type": "string",
+            "description": "RSA exponent (Base64url encoded, typically `AQAB`)."
           }
-        }
+        },
+        "description": "Single JSON Web Key representing an RSA public key used for RS256 JWT signature verification.\nConforms to <see href=\"https://datatracker.ietf.org/doc/html/rfc7517\">RFC 7517</see>."
       },
       "JwksResponse": {
         "type": "object",
@@ -1251,340 +1116,492 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/JsonWebKeyDto"
-            }
+            },
+            "description": "Array of JSON Web Keys. Contains the current signing key and,\nduring a rotation window, the previous key as well."
           }
-        }
+        },
+        "description": "JSON Web Key Set response containing all active RSA public keys for JWT verification.\nReturned by `GET /api/v1/auth/.well-known/jwks.json` and `GET /internal/jwks`."
       },
       "LoginRequest": {
         "type": "object",
         "properties": {
           "email": {
-            "type": "string"
+            "type": "string",
+            "description": "Login email address."
           },
           "password": {
-            "type": "string"
+            "type": "string",
+            "description": "Plain-text password."
           },
           "partner_id": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Optional partner context — set by the API Gateway for custom domain logins.\nWhen `null`, the service resolves all accounts associated with the email.",
+            "format": "uuid"
           },
           "device_info": {
-            "$ref": "#/components/schemas/DeviceInfoDto"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Client device metadata for session tracking.",
+                "$ref": "#/components/schemas/DeviceInfoDto"
+              }
+            ]
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/login`.\nAuthenticates with email and password, optionally scoped to a partner."
       },
       "LoginResponse": {
         "type": "object",
         "properties": {
           "step": {
-            "type": "string"
+            "type": "string",
+            "description": "Login step: `complete` for direct login, `select_partner` for multi-account."
           },
           "access_token": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "JWT access token (RS256 signed, 15-min TTL). Present when `step = \"complete\"`."
           },
           "refresh_token": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Opaque refresh token (30-day absolute TTL). Present when `step = \"complete\"`."
           },
           "token_type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Always `Bearer` when tokens are present."
           },
           "expires_in": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Access token TTL in seconds (900). Present when `step = \"complete\"`.",
+            "format": "int32"
           },
           "user": {
-            "$ref": "#/components/schemas/UserInfoDto"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Basic user info for UI display. Present when `step = \"complete\"`.",
+                "$ref": "#/components/schemas/UserInfoDto"
+              }
+            ]
           },
           "session_token": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Temporary session token for partner selection. Present when `step = \"select_partner\"`."
           },
           "session_token_expires_in": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Session token TTL in seconds (300). Present when `step = \"select_partner\"`.",
+            "format": "int32"
           },
           "accounts": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/AccountInfoDto"
             },
-            "nullable": true
+            "description": "Available partner accounts for selection. Present when `step = \"select_partner\"`."
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/login`.\nReturns either a completed login with tokens (`step = \"complete\"`) or a\npartner selector session (`step = \"select_partner\"`)."
       },
       "LogoutAllRequest": {
         "type": "object",
         "properties": {
           "password": {
-            "type": "string"
+            "type": "string",
+            "description": "Current password for confirmation."
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/logout-all`.\nRevokes all active sessions for the current user across all devices.\nRequires password confirmation for security."
       },
       "LogoutAllResponse": {
         "type": "object",
         "properties": {
           "logged_out": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Always `true` on success."
           },
           "sessions_revoked": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Number of active sessions that were revoked.",
             "format": "int32"
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/logout-all`.\nConfirms all sessions were revoked and returns the count."
       },
       "LogoutRequest": {
         "type": "object",
         "properties": {
           "refresh_token": {
-            "type": "string"
+            "type": "string",
+            "description": "Refresh token to revoke."
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/logout`.\nRevokes the current session's refresh token (single-device logout)."
       },
       "LogoutResponse": {
         "type": "object",
         "properties": {
           "logged_out": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Always `true` on success."
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/logout`.\nConfirms the session was terminated."
       },
       "RateLimitOverride": {
         "type": "object",
         "properties": {
           "rpm": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Requests per minute. Null uses the partner default.",
+            "format": "int32"
           },
           "rph": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Requests per hour. Null uses the partner default.",
+            "format": "int32"
           }
         },
-        "nullable": true
+        "description": "Optional per-key rate limit override included in CreateApiKeyRequest."
       },
       "RefreshRequest": {
         "type": "object",
         "properties": {
           "refresh_token": {
-            "type": "string"
+            "type": "string",
+            "description": "Current opaque refresh token (e.g., `rt_a1b2c3...`)."
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/refresh`.\nExchanges a valid refresh token for a new access token + new refresh token (rotation)."
       },
       "RefreshResponse": {
         "type": "object",
         "properties": {
           "access_token": {
-            "type": "string"
+            "type": "string",
+            "description": "New JWT access token (RS256 signed, 15-min TTL)."
           },
           "refresh_token": {
-            "type": "string"
+            "type": "string",
+            "description": "New opaque refresh token (replaces the old one, 30-day absolute TTL)."
           },
           "token_type": {
-            "type": "string"
+            "type": "string",
+            "description": "Always `Bearer`."
           },
           "expires_in": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Access token TTL in seconds (900).",
             "format": "int32"
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/refresh`.\nContains the rotated token pair — the old refresh token is immediately revoked."
       },
       "ResetDto": {
         "type": "object",
         "properties": {
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque reset token from the password reset email (e.g., `rst_a1b2c3...`)."
           },
           "new_password": {
-            "type": "string"
+            "type": "string",
+            "description": "New password — must satisfy the platform password policy."
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/password/reset`.\nConsumes a single-use reset token and sets a new password."
       },
       "ResetRequestDto": {
         "type": "object",
         "properties": {
           "email": {
-            "type": "string"
+            "type": "string",
+            "description": "Email address associated with the credential to reset."
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/password/reset-request`.\nInitiates the forgot-password flow. Always returns 200 to prevent email enumeration."
       },
       "ResetRequestResponse": {
         "type": "object",
         "properties": {
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "Generic confirmation message — identical for existing and non-existing emails."
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/password/reset-request`.\nAlways returned with 200 OK regardless of whether the email exists."
       },
       "ResetResponse": {
         "type": "object",
         "properties": {
           "password_reset": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Always `true` on success."
           },
           "sessions_invalidated": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether active sessions were revoked as a side effect."
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable confirmation message."
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/password/reset`.\nConfirms the password was reset and all sessions were invalidated."
       },
       "RevokeApiKeyResponse": {
         "type": "object",
         "properties": {
           "api_key_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Revoked API key identifier."
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Always `revoked` on success."
           },
           "revoked_at": {
             "type": "string",
+            "description": "UTC timestamp when the key was revoked.",
             "format": "date-time"
           }
-        }
+        },
+        "description": "Response for `DELETE /api/v1/auth/api-keys/:key_id`.\nConfirms the API key was revoked."
       },
       "RevokeSessionResponse": {
         "type": "object",
         "properties": {
           "session_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Session identifier that was revoked."
           },
           "revoked": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Always `true` on success."
           }
-        }
+        },
+        "description": "Response for `DELETE /api/v1/auth/sessions/:session_id`.\nConfirms the session was revoked."
       },
       "RotateApiKeyRequest": {
         "type": "object",
         "properties": {
           "grace_period_hours": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Hours the old key remains valid after rotation (default: 24).",
             "format": "int32"
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/api-keys/:key_id/rotate`.\nSpecifies the grace period for the old key."
       },
       "RotateApiKeyResponse": {
         "type": "object",
         "properties": {
           "new_key": {
+            "description": "New API key details (full key shown once).",
             "$ref": "#/components/schemas/RotatedNewKey"
           },
           "old_key": {
+            "description": "Old API key deprecation details.",
             "$ref": "#/components/schemas/RotatedOldKey"
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/api-keys/:key_id/rotate`.\nContains the new key (full, shown once) and old key deprecation details."
       },
       "RotatedNewKey": {
         "type": "object",
         "properties": {
           "api_key_id": {
-            "type": "string"
+            "type": "string",
+            "description": "New API key identifier (UUID)."
           },
           "key": {
-            "type": "string"
+            "type": "string",
+            "description": "Full new API key — <b>shown only once, never stored</b>."
           },
           "key_prefix": {
-            "type": "string"
+            "type": "string",
+            "description": "First 16 characters of the new key."
           },
           "warning": {
-            "type": "string"
+            "type": "string",
+            "description": "Security reminder."
           }
-        }
+        },
+        "description": "New key details within a RotateApiKeyResponse."
       },
       "RotatedOldKey": {
         "type": "object",
         "properties": {
           "api_key_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Old API key identifier (UUID)."
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Always `deprecated` — the old key still works until DateTime RotatedOldKey.ExpiresAt."
           },
           "expires_at": {
             "type": "string",
+            "description": "UTC timestamp when the old key stops working.",
             "format": "date-time"
           }
-        }
+        },
+        "description": "Old key deprecation details within a RotateApiKeyResponse."
       },
       "SelectPartnerRequest": {
         "type": "object",
         "properties": {
           "session_token": {
-            "type": "string"
+            "type": "string",
+            "description": "Temporary session token returned by the initial login response."
           },
           "partner_id": {
             "type": "string",
+            "description": "Selected partner identifier from the AccountInfoDto list.",
             "format": "uuid"
           }
-        }
+        },
+        "description": "Request body for `POST /api/v1/auth/login/select-partner`.\nCompletes a multi-account login by selecting a partner from the selector session."
       },
       "SelectPartnerResponse": {
         "type": "object",
         "properties": {
           "step": {
-            "type": "string"
+            "type": "string",
+            "description": "Always `complete`."
           },
           "access_token": {
-            "type": "string"
+            "type": "string",
+            "description": "JWT access token (RS256 signed, 15-min TTL)."
           },
           "refresh_token": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque refresh token (30-day absolute TTL)."
           },
           "token_type": {
-            "type": "string"
+            "type": "string",
+            "description": "Always `Bearer`."
           },
           "expires_in": {
-            "type": "integer",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Access token TTL in seconds (900).",
             "format": "int32"
           },
           "user": {
-            "$ref": "#/components/schemas/UserInfoDto2"
+            "description": "Basic user info for UI display.",
+            "$ref": "#/components/schemas/UserInfoDto"
           }
-        }
+        },
+        "description": "Response for `POST /api/v1/auth/login/select-partner`.\nIdentical to the completed LoginResponse (with `step = \"complete\"`)."
       },
       "SessionInfo": {
         "type": "object",
         "properties": {
           "session_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Session identifier (UUID)."
           },
           "device_name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Human-readable device description (e.g., `Chrome on MacBook Pro`)."
           },
           "platform": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Client platform: `web`, `ios`, `android`, or `api`."
           },
           "ip_address": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Last known IP address for this session."
           },
           "location": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Geo-IP resolved location (e.g., `Los Angeles, CA`)."
           },
           "last_active_at": {
             "type": "string",
+            "description": "Last token refresh or activity timestamp (ISO 8601 UTC).",
             "format": "date-time"
           },
           "created_at": {
             "type": "string",
+            "description": "Session creation timestamp (ISO 8601 UTC).",
             "format": "date-time"
           },
           "is_current": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether this is the session making the current request."
           }
-        }
+        },
+        "description": "Individual session details returned in SessionListResponse.\nMaps selected fields from the `sessions` table with a computed `is_current` flag."
       },
       "SessionListResponse": {
         "type": "object",
@@ -1593,189 +1610,239 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SessionInfo"
-            }
+            },
+            "description": "Active sessions for the user, ordered by most recently active first."
           }
-        }
+        },
+        "description": "Response for `GET /api/v1/auth/sessions`.\nContains all active sessions for the authenticated user."
       },
       "UserInfoDto": {
         "type": "object",
         "properties": {
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "User identifier (UUID from the `users` table in User Service)."
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "description": "Login email address."
           },
           "first_name": {
-            "type": "string"
+            "type": "string",
+            "description": "User's first name."
           },
           "last_name": {
-            "type": "string"
+            "type": "string",
+            "description": "User's last name."
           },
           "role": {
-            "type": "string"
+            "type": "string",
+            "description": "User's role at the selected partner (e.g., `dispatcher`, `process_server`)."
           },
           "partner_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner identifier for the active session."
           },
           "partner_name": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner display name for the active session."
           }
         },
-        "nullable": true
-      },
-      "UserInfoDto2": {
-        "type": "object",
-        "properties": {
-          "user_id": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "first_name": {
-            "type": "string"
-          },
-          "last_name": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "partner_id": {
-            "type": "string",
-            "nullable": true
-          },
-          "partner_name": {
-            "type": "string",
-            "nullable": true
-          }
-        }
+        "description": "Basic user information returned on successful login for UI display."
       },
       "ValidateApiKeyRateLimit": {
         "type": "object",
         "properties": {
           "requests_per_minute": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Requests per minute allowed for this key.",
+            "format": "int32"
           },
           "requests_per_hour": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Requests per hour allowed for this key.",
+            "format": "int32"
           }
         },
-        "nullable": true
+        "description": "Rate limit configuration returned in ValidateApiKeyResponse."
       },
       "ValidateApiKeyRequest": {
         "type": "object",
         "properties": {
           "api_key": {
-            "type": "string"
+            "type": "string",
+            "description": "Full API key string (e.g., `ldk_live_a1b2c3...`)."
           },
           "source_ip": {
-            "type": "string"
+            "type": "string",
+            "description": "IP address of the requesting client for allowlist enforcement."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/validate-api-key`.\nCalled by the API Gateway to authenticate requests bearing an API key."
       },
       "ValidateApiKeyResponse": {
         "type": "object",
         "properties": {
           "valid": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the API key is valid and usable."
           },
           "api_key_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "API key identifier (UUID); null when invalid."
           },
           "partner_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner that owns this key (UUID); null when invalid."
           },
           "permissions": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             },
-            "nullable": true
+            "description": "Granted permission strings; null when invalid."
           },
           "environment": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Target environment (`live` or `test`); null when invalid."
           },
           "rate_limit": {
-            "$ref": "#/components/schemas/ValidateApiKeyRateLimit"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Rate limit information; null when invalid.",
+                "$ref": "#/components/schemas/ValidateApiKeyRateLimit"
+              }
+            ]
           },
           "reason": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Reason the key is invalid; null when bool ValidateApiKeyResponse.Valid is `true`.\nValues: `KEY_NOT_FOUND`, `KEY_REVOKED`, `KEY_SUSPENDED`,\n`KEY_EXPIRED`, `IP_NOT_ALLOWED`, `PARTNER_INACTIVE`."
           },
           "source_ip": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Source IP included when string? ValidateApiKeyResponse.Reason is `IP_NOT_ALLOWED`."
           }
-        }
+        },
+        "description": "Response for `POST /internal/validate-api-key`.\nReturns the partner context and permissions when valid, or a reason when invalid."
       },
       "ValidateInviteTokenRequest": {
         "type": "object",
         "properties": {
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "Invitation token string to validate."
           }
-        }
+        },
+        "description": "Request body for `POST /internal/invite-token/validate`.\nCalled by the User Account Service during registration to validate an invitation token."
       },
       "ValidateInviteTokenResponse": {
         "type": "object",
         "properties": {
           "valid": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the token is valid and usable."
           },
           "invitation_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Invitation record identifier (UUID); null when bool ValidateInviteTokenResponse.Valid is `false`."
           },
           "email": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Email address the invitation was sent to; null when invalid."
           },
           "partner_id": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner the user is being invited to (UUID); null when invalid."
           },
           "role": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Role assigned to the invitation (e.g., `dispatcher`); null when invalid."
           },
           "invitation_type": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Invitation type — `operations` or `server_relationship`; null when invalid."
           },
           "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Token expiry timestamp (ISO 8601 UTC); null when invalid.",
+            "format": "date-time"
           },
           "reason": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Reason the token is invalid; null when bool ValidateInviteTokenResponse.Valid is `true`.\nValues: `TOKEN_EXPIRED`, `TOKEN_USED`, `TOKEN_REVOKED`, `TOKEN_NOT_FOUND`."
           },
           "expired_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the token expired; populated only when string? ValidateInviteTokenResponse.Reason is `TOKEN_EXPIRED`.",
+            "format": "date-time"
           }
-        }
+        },
+        "description": "Response for `POST /internal/invite-token/validate` when the token is valid.\nReturns the invitation metadata needed by UAS to complete registration."
       }
     }
   },
   "tags": [
-    {
-      "name": "Health",
-      "description": "Liveness and readiness probes"
-    },
     {
       "name": "Login",
       "description": "Password-based login and multi-account partner selection"
@@ -1799,10 +1866,6 @@
     {
       "name": "JWKS",
       "description": "JSON Web Key Sets for token verification"
-    },
-    {
-      "name": "Internal",
-      "description": "Service-to-service endpoints (not exposed via API Gateway)"
     }
   ]
 }

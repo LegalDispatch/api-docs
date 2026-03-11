@@ -9,76 +9,28 @@ info:
     ## Authentication
     - **Admin routes** (`/admin/v1/*`) — Require `super_admin` role via JWT.
     - **Partner routes** (`/api/v1/*`) — Require `partner_admin` role via JWT.
-    - **Internal routes** (`/internal/*`) — Require a shared service token (`X-Internal-Token` header).
 
-    ## File structure
-    This spec is split across multiple files for maintainability:
-    - `paths-*.yaml`  — Route definitions by domain area
-    - `schemas.yaml`  — All request/response/model schemas
-    - `parameters.yaml` — Shared path parameters and security schemes
+    ## Response Format
+    All responses use **snake_case** JSON serialization. Error responses follow the
+    standard envelope: `{ "code": "CODE", "message": "...", "request_id": "..." }`.
 servers:
   - url: http://localhost:8090
     description: Local development
 tags:
-  - name: Health
-    description: Liveness and readiness probes
   - name: Admin
     description: Super-admin partner management
   - name: Partner
     description: Partner self-service (pricing, statuses, settings)
   - name: Clients
     description: Client management (CRUD, pricing overrides)
-  - name: Internal
-    description: Service-to-service endpoints (authenticated via shared token)
 paths:
-  /health:
-    get:
-      tags:
-        - Health
-      summary: Liveness check
-      description: Returns 200 if the process is running. Used by Kubernetes liveness probes.
-      operationId: health
-      responses:
-        '200':
-          description: Process is running
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  go_version:
-                    type: string
-                    example: go1.24.0
-  /ready:
-    get:
-      tags:
-        - Health
-      summary: Readiness check
-      description: Checks all dependencies (database, read replica, cache, event bus) and returns 200 if all are healthy, 503 if any are unhealthy.
-      operationId: ready
-      responses:
-        '200':
-          description: All dependencies healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-        '503':
-          description: One or more dependencies unhealthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
   /admin/v1/partners:
     post:
       tags:
         - Admin
       summary: Create a new partner
       description: Creates a new partner organization and initialises its onboarding checklist.
-      operationId: createPartner
+      operationId: pms_createPartner
       security:
         - bearerAuth: []
       requestBody:
@@ -118,7 +70,7 @@ paths:
         - Admin
       summary: Update partner status
       description: Transitions a partner to a new lifecycle status with an audit reason.
-      operationId: updatePartnerStatus
+      operationId: pms_updatePartnerStatus
       security:
         - bearerAuth: []
       parameters:
@@ -166,7 +118,7 @@ paths:
         - Admin
       summary: Update partner subscription plan
       description: Changes a partner's subscription plan and adjusts feature flags and rate limits accordingly.
-      operationId: updatePartnerPlan
+      operationId: pms_updatePartnerPlan
       security:
         - bearerAuth: []
       parameters:
@@ -208,7 +160,7 @@ paths:
         - Partner
       summary: Get current partner profile
       description: Returns the full profile of the authenticated partner.
-      operationId: getMyPartner
+      operationId: pms_getMyPartner
       security:
         - bearerAuth: []
       responses:
@@ -236,7 +188,7 @@ paths:
         - Partner
       summary: Get SOP pricing
       description: Returns the partner's current service of process pricing configuration.
-      operationId: getSOPPricing
+      operationId: pms_getSOPPricing
       security:
         - bearerAuth: []
       responses:
@@ -263,7 +215,7 @@ paths:
         - Partner
       summary: Update SOP pricing
       description: Updates the partner's service of process pricing configuration.
-      operationId: updateSOPPricing
+      operationId: pms_updateSOPPricing
       security:
         - bearerAuth: []
       requestBody:
@@ -303,7 +255,7 @@ paths:
         - Partner
       summary: Create a location-based pricing rule
       description: Creates a location-specific SOP pricing override rule for the partner.
-      operationId: createLocationRule
+      operationId: pms_createLocationRule
       security:
         - bearerAuth: []
       requestBody:
@@ -343,7 +295,7 @@ paths:
         - Partner
       summary: Create a custom attempt status
       description: Creates a partner-specific custom attempt result code with base status mapping.
-      operationId: createCustomStatus
+      operationId: pms_createCustomStatus
       security:
         - bearerAuth: []
       requestBody:
@@ -389,7 +341,7 @@ paths:
         - Partner
       summary: Update transfer settings
       description: Updates the partner's inbound transfer acceptance configuration.
-      operationId: updateTransferSettings
+      operationId: pms_updateTransferSettings
       security:
         - bearerAuth: []
       requestBody:
@@ -429,7 +381,7 @@ paths:
         - Clients
       summary: Create a client
       description: Creates a new client organization under the authenticated partner.
-      operationId: createClient
+      operationId: pms_createClient
       security:
         - bearerAuth: []
       requestBody:
@@ -474,7 +426,7 @@ paths:
         - Clients
       summary: List clients
       description: Returns all clients belonging to the authenticated partner, optionally filtered by status.
-      operationId: listClients
+      operationId: pms_listClients
       security:
         - bearerAuth: []
       parameters:
@@ -507,7 +459,7 @@ paths:
         - Clients
       summary: Get client details
       description: Returns detailed client information including optional pricing overrides.
-      operationId: getClient
+      operationId: pms_getClient
       security:
         - bearerAuth: []
       parameters:
@@ -536,7 +488,7 @@ paths:
         - Clients
       summary: Update a client
       description: Updates client fields. Only provided fields are changed.
-      operationId: updateClient
+      operationId: pms_updateClient
       security:
         - bearerAuth: []
       parameters:
@@ -584,7 +536,7 @@ paths:
         - Clients
       summary: Update client status
       description: Transitions a client to a new status.
-      operationId: updateClientStatus
+      operationId: pms_updateClientStatus
       security:
         - bearerAuth: []
       parameters:
@@ -626,7 +578,7 @@ paths:
         - Clients
       summary: Get client pricing overrides
       description: Returns the client-specific pricing overrides. Null fields mean partner defaults are used.
-      operationId: getClientPricing
+      operationId: pms_getClientPricing
       security:
         - bearerAuth: []
       parameters:
@@ -655,7 +607,7 @@ paths:
         - Clients
       summary: Upsert client pricing overrides
       description: Creates or updates client-specific pricing overrides. Null fields revert to partner defaults.
-      operationId: upsertClientPricing
+      operationId: pms_upsertClientPricing
       security:
         - bearerAuth: []
       parameters:
@@ -696,7 +648,7 @@ paths:
         - Clients
       summary: Delete client pricing overrides (revert to partner defaults)
       description: Removes all client-specific pricing overrides. The client will use partner-level defaults.
-      operationId: deleteClientPricing
+      operationId: pms_deleteClientPricing
       security:
         - bearerAuth: []
       parameters:
@@ -716,398 +668,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}:
-    get:
-      tags:
-        - Internal
-      summary: Get partner by ID
-      description: Returns the full partner record for service-to-service lookups.
-      operationId: getPartnerByID
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-      responses:
-        '200':
-          description: Partner details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Partner'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}/settings:
-    get:
-      tags:
-        - Internal
-      summary: Get partner settings (composite view)
-      description: Returns the composite settings view consumed by other services (SOP, Filing, Gateway) on every request to determine partner capabilities and configuration.
-      operationId: getPartnerSettings
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-      responses:
-        '200':
-          description: Partner settings
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartnerSettings'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}/branding:
-    get:
-      tags:
-        - Internal
-      summary: Get partner branding
-      description: Returns white-label branding configuration for the partner's portal.
-      operationId: getPartnerBranding
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-      responses:
-        '200':
-          description: Branding details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PartnerBranding'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/by-domain/{domain}:
-    get:
-      tags:
-        - Internal
-      summary: Look up partner by custom domain
-      description: Resolves a custom portal domain to the owning partner.
-      operationId: getPartnerByDomain
-      security:
-        - internalToken: []
-      parameters:
-        - name: domain
-          in: path
-          required: true
-          description: Custom portal domain to look up.
-          schema:
-            type: string
-            example: serve.acmelegal.com
-      responses:
-        '200':
-          description: Partner details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Partner'
-        '404':
-          description: No partner found for domain
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/custom-attempt-statuses/{partnerID}:
-    get:
-      tags:
-        - Internal
-      summary: Get custom attempt statuses for a partner
-      description: Returns all custom attempt statuses defined by the partner.
-      operationId: getCustomAttemptStatuses
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-      responses:
-        '200':
-          description: Custom statuses
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CustomStatus'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/calculate-service-fee:
-    post:
-      tags:
-        - Internal
-      summary: Calculate SOP service fee
-      description: Calculates the total service of process fee for a given partner, location, urgency, party count, and optional client. Applies pricing strategy, location rules, and client overrides when available.
-      operationId: calculateServiceFee
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FeeRequest'
-      responses:
-        '200':
-          description: Fee calculation result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeResult'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/resolve-attempt-status:
-    post:
-      tags:
-        - Internal
-      summary: Resolve attempt status using partner's custom mappings
-      description: Looks up a result code against the partner's custom status mappings. Falls back to base statuses if no custom mapping exists.
-      operationId: resolveAttemptStatus
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResolveStatusRequest'
-      responses:
-        '200':
-          description: Resolved status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusResolution'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/check-transfer-acceptance:
-    post:
-      tags:
-        - Internal
-      summary: Check if a partner will accept a transfer
-      description: Evaluates transfer settings, blacklists, auto-accept rules, and daily limits to determine if the receiving partner will accept a transfer.
-      operationId: checkTransferAcceptance
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TransferCheckRequest'
-      responses:
-        '200':
-          description: Transfer check result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransferCheckResult'
-        '403':
-          description: Sending partner is blacklisted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/calculate-filing-fee:
-    post:
-      tags:
-        - Internal
-      summary: Calculate filing fee
-      description: Calculates the total filing fee including the partner's markup. Applies court-specific overrides when available.
-      operationId: calculateFilingFee
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FilingFeeRequest'
-      responses:
-        '200':
-          description: Fee calculation result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FilingFeeResult'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/check-fee-waiver-eligibility:
-    post:
-      tags:
-        - Internal
-      summary: Check fee waiver eligibility
-      description: Determines if a filer is eligible for a court fee waiver based on partner and filer configuration.
-      operationId: checkFeeWaiverEligibility
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FeeWaiverCheckRequest'
-      responses:
-        '200':
-          description: Eligibility result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeWaiverCheckResult'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/check-plan-limit:
-    post:
-      tags:
-        - Internal
-      summary: Check if partner has reached plan limits
-      description: Checks whether the partner's current usage for a resource is within their plan limits.
-      operationId: checkPlanLimit
-      security:
-        - internalToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PlanLimitCheckRequest'
-      responses:
-        '200':
-          description: Plan limit result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlanLimitCheckResult'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Plan limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}/rate-limits:
-    get:
-      tags:
-        - Internal
-      summary: Get rate limits for a partner
-      description: Returns the rate limiting configuration based on the partner's subscription plan.
-      operationId: getRateLimits
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-      responses:
-        '200':
-          description: Rate limit configuration
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RateLimitConfig'
-        '404':
-          description: Partner not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}/client/{clientID}:
-    get:
-      tags:
-        - Internal
-      summary: Get client by ID (internal)
-      description: Returns a client record for service-to-service lookups.
-      operationId: getClientByIDInternal
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-        - $ref: '#/components/parameters/clientID'
-      responses:
-        '200':
-          description: Client details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Client'
-        '404':
-          description: Client not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /internal/partner/{partnerID}/client/{clientID}/pricing:
-    get:
-      tags:
-        - Internal
-      summary: Get client pricing (internal)
-      description: Returns client-specific pricing overrides for fee calculation.
-      operationId: getClientPricingInternal
-      security:
-        - internalToken: []
-      parameters:
-        - $ref: '#/components/parameters/partnerID'
-        - $ref: '#/components/parameters/clientID'
-      responses:
-        '200':
-          description: Client pricing details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClientPricing'
-        '404':
-          description: Client not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    internalToken:
-      type: apiKey
-      in: header
-      name: X-Internal-Token
   parameters:
     partnerID:
       name: partnerID
@@ -1126,19 +692,31 @@ components:
   schemas:
     ErrorResponse:
       type: object
-      description: Standard error response returned by all endpoints on failure.
+      description: |
+        Standard error envelope returned by all error responses.
+        Matches the platform-wide flat error shape.
       required:
         - code
         - message
+        - request_id
       properties:
         code:
           type: string
-          description: Machine-readable error code (e.g. VALIDATION_ERROR, PARTNER_NOT_FOUND).
+          description: Machine-readable error code in `SCREAMING_SNAKE_CASE`.
           example: VALIDATION_ERROR
         message:
           type: string
           description: Human-readable error description.
           example: Request validation failed
+        request_id:
+          type: string
+          format: uuid
+          description: Correlation ID for the request (from `X-Correlation-ID` header).
+          example: 550e8400-e29b-41d4-a716-446655440000
+        details:
+          type: object
+          description: Optional validation error details.
+          additionalProperties: true
     CreatePartnerRequest:
       type: object
       description: Request body for creating a new partner organization.
@@ -1651,174 +1229,6 @@ components:
             - string
             - 'null'
           description: Notes about the pricing arrangement.
-    FeeRequest:
-      type: object
-      description: Request body for POST /internal/calculate-service-fee.
-      required:
-        - partner_id
-        - service_type
-        - urgency
-        - location
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner whose pricing rules to apply.
-        service_type:
-          type: string
-          description: Type of service (e.g. personal, sub-service, posting).
-          example: personal
-        urgency:
-          type: string
-          description: Urgency level affecting premium calculation.
-          enum:
-            - standard
-            - rush
-            - same_day
-            - emergency
-          example: standard
-        location:
-          $ref: '#/components/schemas/Location'
-        party_count:
-          type: integer
-          description: Number of parties to serve. Required for per_party strategy. Default 1.
-          default: 1
-          example: 3
-        client_id:
-          type:
-            - string
-            - 'null'
-          format: uuid
-          description: Optional client ID for client-specific pricing overrides.
-    ResolveStatusRequest:
-      type: object
-      description: Request body for POST /internal/resolve-attempt-status.
-      required:
-        - partner_id
-        - result_code
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner whose custom status mappings to search.
-        result_code:
-          type: string
-          description: The result code to resolve.
-          example: LEFT_WITH_COWORKER
-    TransferCheckRequest:
-      type: object
-      description: Request body for POST /internal/check-transfer-acceptance.
-      required:
-        - from_partner_id
-        - to_partner_id
-        - location
-      properties:
-        from_partner_id:
-          type: string
-          format: uuid
-          description: Partner initiating the transfer.
-        to_partner_id:
-          type: string
-          format: uuid
-          description: Partner receiving the transfer.
-        location:
-          $ref: '#/components/schemas/Location'
-    FilingFeeRequest:
-      type: object
-      description: Request body for POST /internal/calculate-filing-fee.
-      required:
-        - partner_id
-        - court_id
-        - base_fee
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner whose filing markup rules to apply.
-        court_id:
-          type: string
-          description: Court identifier for court-specific overrides.
-          example: CA-LA-SUP
-        base_fee:
-          type: number
-          format: double
-          description: Court's base filing fee before partner markup.
-          example: 435
-        fee_waived:
-          type: boolean
-          description: Whether the court has waived the filing fee.
-          default: false
-    FeeWaiverCheckRequest:
-      type: object
-      description: Request body for POST /internal/check-fee-waiver-eligibility.
-      required:
-        - partner_id
-        - filer_type
-        - court_id
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner to check eligibility for.
-        filer_type:
-          type: string
-          description: Type of filer (e.g. individual, government).
-          example: individual
-        court_id:
-          type: string
-          description: Court identifier.
-          example: CA-LA-SUP
-    PlanLimitCheckRequest:
-      type: object
-      description: Request body for POST /internal/check-plan-limit.
-      required:
-        - partner_id
-        - resource
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner whose plan limits to check.
-        resource:
-          type: string
-          description: Resource type to check (e.g. orders, clients, api_calls).
-          example: orders
-    HealthResponse:
-      type: object
-      description: Full readiness check response including dependency statuses.
-      properties:
-        status:
-          type: string
-          description: Overall health status.
-          enum:
-            - ok
-            - degraded
-          example: ok
-        database:
-          type: string
-          description: Primary database connection status.
-          example: ok
-        read_replica:
-          type: string
-          description: Read replica connection status.
-          example: ok
-        cache:
-          type: string
-          description: Redis cache connection status.
-          example: ok
-        event_bus:
-          type: string
-          description: RabbitMQ event bus connection status.
-          example: ok
-        uptime_seconds:
-          type: integer
-          format: int64
-          description: Seconds since the service started.
-          example: 3600
-        go_version:
-          type: string
-          description: Go runtime version.
-          example: go1.24.0
     CreatePartnerResponse:
       type: object
       description: Response returned after successfully creating a new partner.
@@ -1870,195 +1280,6 @@ components:
           type: string
           description: Plan after the update.
           example: enterprise
-    FeeResult:
-      type: object
-      description: Calculated service fee response with strategy metadata and line-item breakdown.
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-          description: Partner whose pricing was applied.
-        pricing_strategy:
-          type: string
-          description: Which pricing model produced the result.
-          enum:
-            - flat_per_location
-            - flat_plus_mileage
-            - per_party
-            - tiered_flat
-          example: flat_per_location
-        coverage:
-          type: string
-          description: Whether the partner covers this location.
-          enum:
-            - covered
-            - not_covered
-          example: covered
-        fee_line_items:
-          type: array
-          description: Itemised fee components.
-          items:
-            $ref: '#/components/schemas/FeeLineItem'
-        estimated_total:
-          type:
-            - number
-            - 'null'
-          format: double
-          description: Total of all line items. Null when not_covered.
-          example: 100
-        location_matched:
-          description: Which location rule matched, if any.
-          oneOf:
-            - $ref: '#/components/schemas/LocationMatched'
-            - type: 'null'
-        mileage_detail:
-          description: Mileage calculation details (flat_plus_mileage strategy only).
-          oneOf:
-            - $ref: '#/components/schemas/MileageDetail'
-            - type: 'null'
-        per_party_detail:
-          description: Per-party calculation details (per_party strategy only).
-          oneOf:
-            - $ref: '#/components/schemas/PerPartyDetail'
-            - type: 'null'
-        client_adjustments:
-          description: Client-level pricing adjustments applied, if any.
-          oneOf:
-            - $ref: '#/components/schemas/ClientAdjustments'
-            - type: 'null'
-        message:
-          type: string
-          description: Human-readable message (e.g. not_covered reason).
-    FilingFeeResult:
-      type: object
-      description: Calculated filing fee returned by POST /internal/calculate-filing-fee.
-      properties:
-        markup_type:
-          type: string
-          description: Type of markup applied (flat or percentage).
-          example: percentage
-        court_base_fee:
-          type: number
-          format: double
-          description: Original court filing fee.
-          example: 435
-        markup_value:
-          type: number
-          format: double
-          description: Markup amount or percentage value.
-          example: 10
-        markup_amount:
-          type: number
-          format: double
-          description: Actual dollar amount of markup applied.
-          example: 43.5
-        total_fee:
-          type: number
-          format: double
-          description: Total filing fee (court fee + markup).
-          example: 478.5
-        override_applied:
-          type: boolean
-          description: Whether a court-specific override was used.
-        fee_waived:
-          type: boolean
-          description: Whether the filing fee was waived.
-    FeeWaiverCheckResult:
-      type: object
-      description: Fee waiver eligibility result.
-      properties:
-        eligible:
-          type: boolean
-          description: Whether the filer is eligible for a fee waiver.
-          example: true
-        reason:
-          type: string
-          description: Explanation of the eligibility determination.
-          example: Government filers are exempt from filing fees
-    PlanLimitCheckResult:
-      type: object
-      description: Plan limit check result.
-      properties:
-        plan:
-          type: string
-          description: Current subscription plan.
-          example: professional
-        current_usage:
-          type: integer
-          description: Current usage count for the resource.
-          example: 450
-        limit:
-          type: integer
-          description: Plan limit for the resource (-1 means unlimited).
-          example: 500
-        allowed:
-          type: boolean
-          description: Whether the operation is allowed within plan limits.
-          example: true
-    RateLimitConfig:
-      type: object
-      description: Rate limiting configuration for a partner's API access.
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-        plan:
-          type: string
-          description: Partner's subscription plan.
-          example: professional
-        requests_per_minute:
-          type: integer
-          description: Maximum API requests per minute.
-          example: 60
-        requests_per_hour:
-          type: integer
-          description: Maximum API requests per hour.
-          example: 1000
-        burst_size:
-          type: integer
-          description: Maximum burst size for rate limiter token bucket.
-          example: 10
-    StatusResolution:
-      type: object
-      description: Result of resolving a result code to a base status.
-      properties:
-        result_code:
-          type: string
-          description: The result code that was resolved.
-          example: LEFT_WITH_COWORKER
-        maps_to_base:
-          type: string
-          description: Base system status this code maps to.
-          example: served
-        next_party_status:
-          type: string
-          description: Status the serving party transitions to.
-          example: completed
-        is_custom:
-          type: boolean
-          description: Whether this is a partner-defined custom status.
-          example: true
-    TransferCheckResult:
-      type: object
-      description: Transfer acceptance check result.
-      properties:
-        will_accept:
-          type: boolean
-          description: Whether the receiving partner will accept the transfer.
-          example: true
-        auto_accept:
-          type: boolean
-          description: Whether the transfer will be auto-accepted (no manual approval needed).
-          example: false
-        transfer_fee:
-          type: number
-          format: double
-          description: Fee for the transfer (0 if no fee).
-          example: 15
-        reason:
-          type: string
-          description: Explanation of the acceptance decision.
-          example: Partner accepts inbound transfers within jurisdiction
     CreateClientResponse:
       type: object
       description: Response returned after successfully creating a client.
@@ -2094,47 +1315,6 @@ components:
           description: Client-specific pricing overrides, if configured.
           oneOf:
             - $ref: '#/components/schemas/ClientPricing'
-            - type: 'null'
-    PartnerSettings:
-      type: object
-      description: Composite settings view consumed by other services (SOP, Filing, Gateway) on every request to determine partner capabilities and configuration.
-      properties:
-        partner_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          description: Current partner lifecycle status.
-          enum:
-            - pending_setup
-            - trial
-            - active
-            - suspended
-            - terminated
-        partner_type:
-          type: string
-          enum:
-            - law_firm
-            - process_serving_company
-        subscription_plan:
-          type: string
-          enum:
-            - starter
-            - professional
-            - enterprise
-        timezone:
-          type: string
-          description: Partner's IANA timezone.
-          example: America/Los_Angeles
-        features:
-          description: Feature flags for the partner.
-          oneOf:
-            - $ref: '#/components/schemas/PartnerFeatures'
-            - type: 'null'
-        transfer_settings:
-          description: Transfer acceptance configuration.
-          oneOf:
-            - $ref: '#/components/schemas/TransferSettings'
             - type: 'null'
     Partner:
       type: object

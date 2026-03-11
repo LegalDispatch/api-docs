@@ -30,6 +30,11 @@ jobs:
           chmod +x scripts/merge-specs.sh
           ./scripts/merge-specs.sh
 
+      - name: Validate merged spec
+        run: |
+          chmod +x scripts/validate-spec.sh
+          ./scripts/validate-spec.sh merged/
+
       - name: Commit merged spec
         run: |
           git config user.name "github-actions[bot]"
@@ -38,6 +43,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to merged spec"
           else
-            git commit -m "chore: regenerate merged openapi.yaml"
+            git commit -m "chore: regenerate merged openapi.yaml [skip ci]"
             git push
           fi

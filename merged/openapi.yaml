@@ -15,13 +15,6 @@ info:
     email: engineering@legaldispatch.io
   license:
     name: Proprietary
-servers:
-- url: https://api.legaldispatch.dev
-  description: Production
-- url: https://api.staging.legaldispatch.dev
-  description: Staging
-- url: http://localhost:8080
-  description: Local development (via API gateway)
 tags:
 - name: Authentication
   description: Login, logout, token management, password reset, sessions, API keys,
@@ -44,6 +37,7 @@ tags:
     document packaging, review queue, and ops notes.
 paths:
   /api/v1/auth/login:
+    servers: []
     post:
       tags:
       - Authentication
@@ -99,6 +93,7 @@ paths:
         '423':
           description: Locked
   /api/v1/auth/login/select-partner:
+    servers: []
     post:
       tags:
       - Authentication
@@ -146,6 +141,7 @@ paths:
         '403':
           description: Forbidden
   /api/v1/auth/refresh:
+    servers: []
     post:
       tags:
       - Authentication
@@ -214,6 +210,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/logout:
+    servers: []
     post:
       tags:
       - Authentication
@@ -255,6 +252,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/logout-all:
+    servers: []
     post:
       tags:
       - Authentication
@@ -298,6 +296,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/password/reset-request:
+    servers: []
     post:
       tags:
       - Authentication
@@ -341,6 +340,7 @@ paths:
         '400':
           description: Bad Request
   /api/v1/auth/password/reset:
+    servers: []
     post:
       tags:
       - Authentication
@@ -400,6 +400,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/password/change:
+    servers: []
     post:
       tags:
       - Authentication
@@ -456,6 +457,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/sessions:
+    servers: []
     get:
       tags:
       - Authentication
@@ -490,6 +492,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/auth/sessions/{sessionId}:
+    servers: []
     delete:
       tags:
       - Authentication
@@ -538,6 +541,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/auth/api-keys:
+    servers: []
     post:
       tags:
       - Authentication
@@ -634,6 +638,7 @@ paths:
         '403':
           description: Forbidden
   /api/v1/auth/api-keys/{keyId}:
+    servers: []
     delete:
       tags:
       - Authentication
@@ -683,6 +688,7 @@ paths:
         '403':
           description: Forbidden
   /api/v1/auth/api-keys/{keyId}/rotate:
+    servers: []
     post:
       tags:
       - Authentication
@@ -762,6 +768,7 @@ paths:
         '403':
           description: Forbidden
   /api/v1/auth/.well-known/jwks.json:
+    servers: []
     get:
       tags:
       - Authentication
@@ -813,6 +820,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/JwksResponse'
   /api/v1/documents/{documentID}/url:
+    servers:
+    - url: http://localhost:8086
+      description: Local development
     get:
       tags:
       - Documents
@@ -893,6 +903,7 @@ paths:
                 message: Document not found
                 request_id: 550e8400-e29b-41d4-a716-446655440000
   /api/v1/ops/work-orders:
+    servers: []
     get:
       tags:
       - Operations
@@ -969,6 +980,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}:
+    servers: []
     get:
       tags:
       - Operations
@@ -1014,6 +1026,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/cancel:
+    servers: []
     post:
       tags:
       - Operations
@@ -1041,6 +1054,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/complete:
+    servers: []
     post:
       tags:
       - Operations
@@ -1061,6 +1075,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/close:
+    servers: []
     post:
       tags:
       - Operations
@@ -1081,6 +1096,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/claim:
+    servers: []
     post:
       tags:
       - Operations
@@ -1101,6 +1117,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/release:
+    servers: []
     post:
       tags:
       - Operations
@@ -1121,6 +1138,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/assign-operator:
+    servers: []
     post:
       tags:
       - Operations
@@ -1147,6 +1165,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{id}/override-status:
+    servers: []
     post:
       tags:
       - Operations
@@ -1173,6 +1192,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{workOrderId}/assignment:
+    servers: []
     post:
       tags:
       - Operations
@@ -1199,6 +1219,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssignmentResponse'
   /api/v1/ops/work-orders/{workOrderId}/assignment/reassign:
+    servers: []
     post:
       tags:
       - Operations
@@ -1225,6 +1246,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssignmentResponse'
   /api/v1/ops/work-orders/{workOrderId}/assignment/unassign:
+    servers: []
     post:
       tags:
       - Operations
@@ -1251,6 +1273,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssignmentResponse'
   /api/v1/ops/work-orders/{workOrderId}/assignment/history:
+    servers: []
     get:
       tags:
       - Operations
@@ -1273,6 +1296,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AssignmentResponse'
   /api/v1/ops/work-orders/bulk-assign:
+    servers: []
     post:
       tags:
       - Operations
@@ -1292,6 +1316,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/BulkAssignResponse'
   /api/v1/ops/work-orders/bulk-dispatch:
+    servers: []
     post:
       tags:
       - Operations
@@ -1311,6 +1336,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/BulkDispatchResponse'
   /api/v1/ops/work-orders/{workOrderId}/dispatch:
+    servers: []
     post:
       tags:
       - Operations
@@ -1338,6 +1364,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DispatchResponse'
   /api/v1/ops/work-orders/{workOrderId}/attempts:
+    servers: []
     post:
       tags:
       - Operations
@@ -1385,6 +1412,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AttemptResponse'
   /api/v1/ops/work-orders/{workOrderId}/attempts/{attemptId}:
+    servers: []
     patch:
       tags:
       - Operations
@@ -1417,6 +1445,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttemptResponse'
   /api/v1/ops/workers:
+    servers: []
     get:
       tags:
       - Operations
@@ -1463,6 +1492,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkerListResponse'
   /api/v1/ops/workers/{id}:
+    servers: []
     get:
       tags:
       - Operations
@@ -1483,6 +1513,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkerDetailResponse'
   /api/v1/ops/work-orders/{workOrderId}/deliverables:
+    servers: []
     post:
       tags:
       - Operations
@@ -1530,6 +1561,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/DeliverableResponse'
   /api/v1/ops/work-orders/{workOrderId}/deliverables/{deliverableId}:
+    servers: []
     patch:
       tags:
       - Operations
@@ -1583,6 +1615,7 @@ paths:
         '204':
           description: No Content
   /api/v1/ops/work-orders/{workOrderId}/deliverables/{deliverableId}/review:
+    servers: []
     post:
       tags:
       - Operations
@@ -1615,6 +1648,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeliverableResponse'
   /api/v1/ops/work-orders/{workOrderId}/documents:
+    servers: []
     get:
       tags:
       - Operations
@@ -1662,6 +1696,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DocumentResponse'
   /api/v1/ops/work-orders/{workOrderId}/documents/arrange:
+    servers: []
     put:
       tags:
       - Operations
@@ -1684,6 +1719,7 @@ paths:
         '204':
           description: No Content
   /api/v1/ops/work-orders/{workOrderId}/documents/{documentId}:
+    servers: []
     delete:
       tags:
       - Operations
@@ -1706,6 +1742,7 @@ paths:
         '204':
           description: No Content
   /api/v1/ops/work-orders/{workOrderId}/documents/preview-bundle:
+    servers: []
     post:
       tags:
       - Operations
@@ -1722,6 +1759,7 @@ paths:
         '200':
           description: OK
   /api/v1/ops/work-orders/{workOrderId}/documents/generate-packet:
+    servers: []
     post:
       tags:
       - Operations
@@ -1742,6 +1780,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PacketResponse'
   /api/v1/ops/review-queue:
+    servers: []
     get:
       tags:
       - Operations
@@ -1772,6 +1811,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReviewQueueResponse'
   /api/v1/ops/review-queue/{workOrderId}/approve:
+    servers: []
     post:
       tags:
       - Operations
@@ -1799,6 +1839,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/review-queue/{workOrderId}/reject:
+    servers: []
     post:
       tags:
       - Operations
@@ -1826,6 +1867,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/review-queue/{workOrderId}/request-changes:
+    servers: []
     post:
       tags:
       - Operations
@@ -1853,6 +1895,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkOrderResponse'
   /api/v1/ops/work-orders/{workOrderId}/notes:
+    servers: []
     post:
       tags:
       - Operations
@@ -1900,6 +1943,9 @@ paths:
                 items:
                   $ref: '#/components/schemas/NoteResponse'
   /admin/v1/partners:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     post:
       tags:
       - Partners (Admin)
@@ -1941,6 +1987,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /admin/v1/partners/{partnerID}/status:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     patch:
       tags:
       - Partners (Admin)
@@ -1989,6 +2038,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /admin/v1/partners/{partnerID}/plan:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     put:
       tags:
       - Partners (Admin)
@@ -2032,6 +2084,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     get:
       tags:
       - Partners
@@ -2060,6 +2115,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/sop-pricing:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     get:
       tags:
       - Partners
@@ -2127,6 +2185,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/sop-location-rules:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     post:
       tags:
       - Partners
@@ -2167,6 +2228,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/custom-statuses:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     post:
       tags:
       - Partners
@@ -2214,6 +2278,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/transfer-settings:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     put:
       tags:
       - Partners
@@ -2254,6 +2321,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/clients:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     post:
       tags:
       - Partners
@@ -2333,6 +2403,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/clients/{clientID}:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     get:
       tags:
       - Partners
@@ -2411,6 +2484,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/clients/{clientID}/status:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     patch:
       tags:
       - Partners
@@ -2453,6 +2529,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/partners/me/clients/{clientID}/pricing:
+    servers:
+    - url: http://localhost:8090
+      description: Local development
     get:
       tags:
       - Partners
@@ -2552,6 +2631,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/service-requests:
+    servers: []
     get:
       tags:
       - Service of Process
@@ -2654,6 +2734,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/service-requests/{id}:
+    servers: []
     get:
       tags:
       - Service of Process
@@ -2681,6 +2762,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/service-requests/{id}/submit:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2731,6 +2813,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/service-requests/{id}/cancel:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2770,6 +2853,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/transfer:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2815,6 +2899,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/accept-transfer:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2855,6 +2940,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/additional-fees:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2903,6 +2989,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/approve-fees:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2954,6 +3041,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/assign:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -2992,6 +3080,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/{id}/dispatch:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -3032,6 +3121,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/service-requests/batch/{batchId}/assign:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -3068,6 +3158,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/service-requests/{id}/operations-notes:
+    servers: []
     put:
       tags:
       - Service of Process
@@ -3101,6 +3192,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/service-requests/{id}/locations:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -3143,6 +3235,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/service-requests/batch:
+    servers: []
     post:
       tags:
       - Service of Process
@@ -3180,6 +3273,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/service-requests/batch/{batchId}:
+    servers: []
     get:
       tags:
       - Service of Process
@@ -3207,6 +3301,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/accounts/register:
+    servers: []
     post:
       tags:
       - Users
@@ -3241,6 +3336,7 @@ paths:
         '429':
           description: Too Many Requests
   /api/v1/accounts/register/server:
+    servers: []
     post:
       tags:
       - Users
@@ -3267,6 +3363,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/accounts/verify-email:
+    servers: []
     post:
       tags:
       - Users
@@ -3292,6 +3389,7 @@ paths:
         '410':
           description: Gone
   /api/v1/invitations:
+    servers: []
     post:
       tags:
       - Users
@@ -3346,6 +3444,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/invitations/server:
+    servers: []
     post:
       tags:
       - Users
@@ -3373,6 +3472,7 @@ paths:
         '409':
           description: Conflict
   /api/v1/invitations/{id}:
+    servers: []
     delete:
       tags:
       - Users
@@ -3399,6 +3499,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/invitations/{id}/resend:
+    servers: []
     post:
       tags:
       - Users
@@ -3427,6 +3528,7 @@ paths:
         '410':
           description: Gone
   /api/v1/users:
+    servers: []
     get:
       tags:
       - Users
@@ -3475,6 +3577,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/users/{id}:
+    servers: []
     get:
       tags:
       - Users
@@ -3502,6 +3605,7 @@ paths:
         '404':
           description: Not Found
   /api/v1/users/{id}/role:
+    servers: []
     put:
       tags:
       - Users
@@ -3539,6 +3643,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/{id}/deactivate:
+    servers: []
     post:
       tags:
       - Users
@@ -3576,6 +3681,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/{id}/reactivate:
+    servers: []
     post:
       tags:
       - Users
@@ -3607,6 +3713,7 @@ paths:
         '429':
           description: Too Many Requests
   /api/v1/users/me:
+    servers: []
     get:
       tags:
       - Users
@@ -3651,6 +3758,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/users/me/avatar:
+    servers: []
     post:
       tags:
       - Users
@@ -3671,6 +3779,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/users/me/change-password:
+    servers: []
     post:
       tags:
       - Users
@@ -3697,6 +3806,7 @@ paths:
         '401':
           description: Unauthorized
   /api/v1/users/me/server-profile:
+    servers: []
     get:
       tags:
       - Users
@@ -3748,6 +3858,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/me/server-profile/service-areas:
+    servers: []
     put:
       tags:
       - Users
@@ -3779,6 +3890,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/me/partner-relationships:
+    servers: []
     get:
       tags:
       - Users
@@ -3799,6 +3911,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/me/partner-relationships/{relationshipId}/accept:
+    servers: []
     post:
       tags:
       - Users
@@ -3836,6 +3949,7 @@ paths:
         '422':
           description: Unprocessable Entity
   /api/v1/users/me/partner-relationships/{relationshipId}/decline:
+    servers: []
     post:
       tags:
       - Users
@@ -10033,5 +10147,12 @@ x-tagGroups:
   - Invitations
   - Users
   - Server Profiles
+servers:
+- url: https://api.legaldispatch.dev
+  description: Production
+- url: https://api.staging.legaldispatch.dev
+  description: Staging
+- url: http://localhost:8080
+  description: Local development (via API gateway)
 security:
 - BearerAuth: []

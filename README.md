@@ -85,6 +85,7 @@ API Gateway (runtime fetch)
 | authentication-service | JSON (build-time export via `Microsoft.Extensions.ApiDescription.Server`) | `dotnet build` |
 | user-account-service | JSON (build-time export) | `dotnet build` |
 | sop-service | JSON (build-time export) | `dotnet build` |
+| operations-service | JSON (build-time export) | `dotnet build` |
 | document-service | YAML (static, `$ref` bundled) | `redocly bundle` |
 | partner-management-service | YAML (static, `$ref` bundled) | `redocly bundle` |
 
@@ -131,11 +132,43 @@ npx @scalar/cli serve merged/openapi.yaml
 
 ## Adding a New Service
 
-1. Set up spec export in the service's CI (see existing services for patterns)
-2. Add the service's spec push step targeting `specs/<service-name>.yaml` or `.json`
-3. Update `scripts/merge-specs.sh` to include the new spec in the merge
-4. Add a tag for the service in the merge config
-5. Push — the merge workflow will pick it up automatically
+### 1. Export a Public-Only Spec
+
+**.NET services:** Add a `"public"` OpenAPI document with a `ShouldInclude` filter
+that excludes `/internal/*`, `/health`, `/ready`, and `/metrics` paths. Add an
+operation transformer to prefix all `operationId` values (e.g. `svc_`). Add
+`Microsoft.Extensions.ApiDescription.Server` for build-time export + a
+`spec-export` Makefile target.
+
+**Go services:** Create `api/openapi-public.yaml` containing only public paths.
+Prefix all `operationId` values with a short service prefix (e.g. `doc_`).
+
+### 2. Create `push-spec.yml` Workflow
+
+Copy an existing service's `.github/workflows/push-spec.yml` and update:
+- The spec file name in `specs/` (e.g. `specs/my-service.json`)
+- The build command (`.NET: dotnet build`, Go: `redocly bundle`)
+- The path trigger filter
+
+The workflow pushes the spec to the matching branch in this repo using the
+`DOCS_REPO_TOKEN` PAT.
+
+### 3. Update the Merge Pipeline
+
+In `scripts/merge-specs.sh`:
+- Add the new spec to the `SPECS` array
+- Add tag mappings to `TAG_MAP` (map service tags → unified tag name)
+- Add the unified tag to the `TAGS` array with a description
+
+### 4. Push and Verify
+
+Push to `dev` first. The merge workflow will:
+1. Lint the new spec
+2. Merge all specs into `merged/openapi.yaml`
+3. Validate the merged output
+4. Commit and deploy to GitHub Pages
+
+Check the Scalar UI at `/docs` to verify the new endpoints render correctly.
 
 ---
 

@@ -1,11 +1,10 @@
 name: Deploy Docs
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Merge Specs"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "merged/**"
-      - "guides/**"
 
 permissions:
   pages: write
@@ -18,15 +17,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Create site directory
         run: |
@@ -35,7 +35,7 @@ jobs:
           cp -r guides/ _site/guides/
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 

@@ -1,6 +1,7 @@
 name: Merge Specs
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, staging, dev]
     paths:

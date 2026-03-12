@@ -2118,6 +2118,33 @@ paths:
     servers:
     - url: http://localhost:8090
       description: Local development
+    get:
+      tags:
+      - Partners
+      summary: Get SOP pricing
+      description: Returns the partner's current service of process pricing configuration.
+      operationId: pms_getSOPPricing
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: SOP pricing configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOPPricing'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Partner account suspended or terminated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags:
       - Partners
@@ -6317,51 +6344,27 @@ components:
         updated_at:
           type: string
           format: date-time
-    UpdateSOPPricingRequest:
-      type: object
-      description: Request body for updating SOP (Service of Process) pricing configuration.
-      required:
-      - national_base_fee
-      - national_mileage_rate
-      - rush_premium
-      - same_day_premium
-      - emergency_premium
-      - transfer_acceptance_fee
-      properties:
-        national_base_fee:
-          type: number
-          format: double
-          description: Default base fee for standard service of process.
-          example: 75
-        national_mileage_rate:
-          type: number
-          format: double
-          description: Per-mile rate for distance-based surcharge.
-          example: 0.65
-        rush_premium:
-          type: number
-          format: double
-          description: Additional fee for rush service (1-3 day).
-          example: 25
-        same_day_premium:
-          type: number
-          format: double
-          description: Additional fee for same-day service.
-          example: 50
-        emergency_premium:
-          type: number
-          format: double
-          description: Additional fee for emergency/after-hours service.
-          example: 100
-        transfer_acceptance_fee:
-          type: number
-          format: double
-          description: Fee charged when accepting a transfer from another partner.
-          example: 15
     SOPPricing:
       type: object
       description: Service of Process pricing configuration for a partner.
       properties:
+        pricing_strategy:
+          type: string
+          description: Which pricing calculation model to use.
+          enum:
+          - flat_per_location
+          - flat_plus_mileage
+          - per_party
+          - tiered_flat
+          example: flat_per_location
+        coverage_mode:
+          type: string
+          description: Whether to serve all locations or only those with explicit
+            rules.
+          enum:
+          - national
+          - location_rules_only
+          example: national
         national_base_fee:
           type: number
           format: double
@@ -6392,6 +6395,124 @@ components:
           format: double
           description: Fee charged per accepted inbound transfer.
           example: 15
+        reference_latitude:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Latitude of partner's mileage reference point.
+        reference_longitude:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Longitude of partner's mileage reference point.
+        included_miles:
+          type: number
+          format: double
+          description: Miles included in base fee before mileage charges.
+          example: 0
+        urgency_premium_mode:
+          type: string
+          description: Whether urgency premium is per-order or per-party.
+          enum:
+          - per_order
+          - per_party
+          example: per_order
+    UpdateSOPPricingRequest:
+      type: object
+      description: Request body for updating SOP (Service of Process) pricing configuration
+        including strategy selection.
+      required:
+      - national_base_fee
+      - national_mileage_rate
+      - rush_premium
+      - same_day_premium
+      - emergency_premium
+      - transfer_acceptance_fee
+      - pricing_strategy
+      - coverage_mode
+      - urgency_premium_mode
+      properties:
+        pricing_strategy:
+          type: string
+          description: Which pricing calculation model to use.
+          enum:
+          - flat_per_location
+          - flat_plus_mileage
+          - per_party
+          - tiered_flat
+          default: flat_per_location
+          example: flat_per_location
+        coverage_mode:
+          type: string
+          description: Whether to serve all locations or only those with explicit
+            rules.
+          enum:
+          - national
+          - location_rules_only
+          default: national
+          example: national
+        national_base_fee:
+          type: number
+          format: double
+          description: Default base fee for standard service of process.
+          example: 75
+        national_mileage_rate:
+          type: number
+          format: double
+          description: Per-mile rate for distance-based surcharge.
+          example: 0.65
+        rush_premium:
+          type: number
+          format: double
+          description: Additional fee for rush service (1-3 day).
+          example: 25
+        same_day_premium:
+          type: number
+          format: double
+          description: Additional fee for same-day service.
+          example: 50
+        emergency_premium:
+          type: number
+          format: double
+          description: Additional fee for emergency/after-hours service.
+          example: 100
+        transfer_acceptance_fee:
+          type: number
+          format: double
+          description: Fee charged when accepting a transfer from another partner.
+          example: 15
+        reference_latitude:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Latitude of partner's mileage reference point. Required for
+            flat_plus_mileage strategy.
+          example: 34.0522
+        reference_longitude:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Longitude of partner's mileage reference point. Required for
+            flat_plus_mileage strategy.
+          example: -118.2437
+        included_miles:
+          type: number
+          format: double
+          description: Miles included in base fee before mileage charges apply.
+          default: 0
+          example: 15
+        urgency_premium_mode:
+          type: string
+          description: Whether urgency premium is charged per-order or per-party.
+          enum:
+          - per_order
+          - per_party
+          default: per_order
+          example: per_order
     CreateLocationRuleRequest:
       type: object
       description: Request body for creating a location-specific SOP pricing rule.
@@ -6430,6 +6551,20 @@ components:
           format: double
           description: Mileage rate override for this location. Null means use default.
           example: 0.75
+        per_party_rate:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Per-party rate for this location. Used by per_party strategy.
+          example: 55
+        tier_label:
+          type:
+          - string
+          - 'null'
+          description: Pricing tier display name (e.g. "Metro", "Suburban"). Used
+            by tiered_flat strategy.
+          example: Metro
         description:
           type:
           - string
@@ -6470,6 +6605,17 @@ components:
           - 'null'
           format: double
           description: Mileage rate for this location.
+        per_party_rate:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Per-party rate for this location (per_party strategy).
+        tier_label:
+          type:
+          - string
+          - 'null'
+          description: Pricing tier display name (tiered_flat strategy).
         description:
           type:
           - string
@@ -6829,6 +6975,12 @@ components:
           - 'null'
           format: double
           description: Override for emergency premium.
+        sop_per_party_rate_override:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Override for per-party rate (per_party strategy only).
         filing_markup_type_override:
           type:
           - string
@@ -6988,6 +7140,12 @@ components:
           - 'null'
           format: double
           description: Override for emergency premium.
+        sop_per_party_rate_override:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: Override for per-party rate (per_party strategy only).
         filing_markup_type_override:
           type:
           - string

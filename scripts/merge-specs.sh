@@ -190,15 +190,25 @@ TAG_MAP = {
     "Ops Notes": "Operations",
 }
 
+unmapped_tags = set()
 for path, methods in spec.get("paths", {}).items():
     if not isinstance(methods, dict):
         continue
     for method, op in methods.items():
         if not isinstance(op, dict) or "tags" not in op:
             continue
+        for t in op["tags"]:
+            if t not in TAG_MAP:
+                unmapped_tags.add(t)
         op["tags"] = list(dict.fromkeys(
             TAG_MAP.get(t, t) for t in op["tags"]
         ))
+
+if unmapped_tags:
+    print(f"  ⚠ WARNING: {len(unmapped_tags)} unmapped tag(s) found — these will appear as-is in the docs:")
+    for t in sorted(unmapped_tags):
+        print(f"    - \"{t}\"")
+    print(f"  Add them to TAG_MAP in merge-specs.sh to map to a unified group.")
 
 # ── 4b. Set unified tags ────────────────────────────────
 spec["tags"] = [
@@ -316,6 +326,13 @@ parameters["page_size"] = {
     "description": "Number of items per page.",
     "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 25},
 }
+
+# ── 4h. Remove stale x-tagGroups ─────────────────────────
+# redocly join auto-generates x-tagGroups from each spec's granular tags, but
+# step 4a remaps all endpoint tags to unified names. The leftover x-tagGroups
+# still reference the old granular names, causing empty sections in the docs UI.
+# Remove them — the unified tags in 4b are sufficient for navigation.
+spec.pop("x-tagGroups", None)
 
 # ── Write back ───────────────────────────────────────────
 with open(output_path, "w") as f:

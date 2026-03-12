@@ -8,10 +8,10 @@ This repo holds the **unified OpenAPI specification** and **narrative guides** f
 
 ### Two-Layer Documentation Model
 
-| Layer | Audience | Contents |
-|-------|----------|----------|
-| **Unified Gateway Docs** (this repo) | Frontend devs, QA, external consumers | Public endpoints only (`/api/v1/*`, `/admin/v1/*`) |
-| **Individual Service Docs** (service repos) | Backend devs, DevOps | All routes, internal APIs, events, DB schemas |
+| Layer                                       | Audience                              | Contents                                           |
+| ------------------------------------------- | ------------------------------------- | -------------------------------------------------- |
+| **Unified Gateway Docs** (this repo)        | Frontend devs, QA, external consumers | Public endpoints only (`/api/v1/*`, `/admin/v1/*`) |
+| **Individual Service Docs** (service repos) | Backend devs, DevOps                  | All routes, internal APIs, events, DB schemas      |
 
 ---
 
@@ -80,24 +80,24 @@ API Gateway (runtime fetch)
 
 ### Service Spec Sources
 
-| Service | Format | CI Trigger |
-|---------|--------|------------|
-| authentication-service | JSON (build-time export via `Microsoft.Extensions.ApiDescription.Server`) | `dotnet build` |
-| user-account-service | JSON (build-time export) | `dotnet build` |
-| sop-service | JSON (build-time export) | `dotnet build` |
-| operations-service | JSON (build-time export) | `dotnet build` |
-| document-service | YAML (static, `$ref` bundled) | `redocly bundle` |
-| partner-management-service | YAML (static, `$ref` bundled) | `redocly bundle` |
+| Service                    | Format                                                                    | CI Trigger       |
+| -------------------------- | ------------------------------------------------------------------------- | ---------------- |
+| authentication-service     | JSON (build-time export via `Microsoft.Extensions.ApiDescription.Server`) | `dotnet build`   |
+| user-account-service       | JSON (build-time export)                                                  | `dotnet build`   |
+| sop-service                | JSON (build-time export)                                                  | `dotnet build`   |
+| operations-service         | JSON (build-time export)                                                  | `dotnet build`   |
+| document-service           | YAML (static, `$ref` bundled)                                             | `redocly bundle` |
+| partner-management-service | YAML (static, `$ref` bundled)                                             | `redocly bundle` |
 
 ---
 
 ## Branches
 
-| Branch | Environment | Description |
-|--------|-------------|-------------|
-| `main` | Production | Stable, released API |
-| `staging` | Staging | Upcoming release |
-| `dev` | Development | May have unreleased endpoints |
+| Branch    | Environment | Description                   |
+| --------- | ----------- | ----------------------------- |
+| `main`    | Production  | Stable, released API          |
+| `staging` | Staging     | Upcoming release              |
+| `dev`     | Development | May have unreleased endpoints |
 
 Each branch has its own `merged/openapi.yaml`.
 
@@ -125,7 +125,7 @@ Each branch has its own `merged/openapi.yaml`.
 ### Preview Docs
 
 ```bash
-npx @scalar/cli serve merged/openapi.yaml
+npx @scalar/cli document serve merged/openapi.yaml
 ```
 
 ---
@@ -146,6 +146,7 @@ Prefix all `operationId` values with a short service prefix (e.g. `doc_`).
 ### 2. Create `push-spec.yml` Workflow
 
 Copy an existing service's `.github/workflows/push-spec.yml` and update:
+
 - The spec file name in `specs/` (e.g. `specs/my-service.json`)
 - The build command (`.NET: dotnet build`, Go: `redocly bundle`)
 - The path trigger filter
@@ -156,6 +157,7 @@ The workflow pushes the spec to the matching branch in this repo using the
 ### 3. Update the Merge Pipeline
 
 In `scripts/merge-specs.sh`:
+
 - Add the new spec to the `SPECS` array
 - Add tag mappings to `TAG_MAP` (map service tags → unified tag name)
 - Add the unified tag to the `TAGS` array with a description
@@ -163,6 +165,7 @@ In `scripts/merge-specs.sh`:
 ### 4. Push and Verify
 
 Push to `dev` first. The merge workflow will:
+
 1. Lint the new spec
 2. Merge all specs into `merged/openapi.yaml`
 3. Validate the merged output

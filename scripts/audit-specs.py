@@ -10,6 +10,7 @@ specs = [
     ("sop", "sop-service/specs/ServiceOfProcessService_public.json"),
     ("doc", "document-service/api/openapi-public.yaml"),
     ("pms", "partner-management-service/api/openapi-public.yaml"),
+    ("ntf", "notification-service/api/openapi-public.yaml"),
 ]
 
 for svc, path in specs:

@@ -1,0 +1,54 @@
+openapi: 3.1.0
+info:
+  title: Notification Service API
+  version: "1.0"
+  description: |
+    Centralized email delivery engine for the LegalDispatch platform.
+
+    This is an **internal-only service**. It has no public API surface
+    (`/api/v1/*` or `/admin/v1/*`). All notification endpoints are
+    service-to-service via `X-Internal-Token`.
+
+    The full internal API reference (including `/internal/*` and `/webhooks/*`
+    endpoints) is available via Scalar at the service's `/docs` route
+    in development and staging environments.
+
+servers:
+  - url: http://localhost:8088
+    description: Local development
+
+# ════════════════════════════════════════════════════════════════════════
+# No public paths — this service is entirely internal.
+# This spec exists as a registry entry in the unified docs pipeline.
+# ════════════════════════════════════════════════════════════════════════
+paths: {}
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      description: |
+        Standard error envelope returned by all error responses.
+        Matches the platform-wide flat error shape.
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code in `SCREAMING_SNAKE_CASE`.
+          example: NOTIFICATION_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error description.
+          example: Notification not found
+        request_id:
+          type: string
+          format: uuid
+          description: Correlation ID for the request (from `X-Correlation-ID` header).
+          example: 550e8400-e29b-41d4-a716-446655440000
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Per-field validation errors. Only present for VALIDATION_ERROR.
+          example:
+            recipient_email: Email is required

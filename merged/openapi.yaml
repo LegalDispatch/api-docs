@@ -3455,6 +3455,33 @@ paths:
           description: Bad Request
         '410':
           description: Gone
+  /api/v1/invitations/by-token/{token}:
+    servers: []
+    get:
+      tags:
+      - Users
+      summary: Resolve invitation by token
+      description: Public endpoint for the partner portal to resolve an invitation
+        token. Returns invite details so the registration form can be pre-filled.
+        The token itself is the secret — no JWT required.
+      operationId: uas_GetInvitationByToken
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationTokenLookupResponse'
+        '404':
+          description: Not Found
+        '410':
+          description: Gone
   /api/v1/invitations:
     servers: []
     post:
@@ -8666,6 +8693,54 @@ components:
           type: string
           description: CDN URL for the newly uploaded avatar image.
       description: Response from `POST /api/v1/users/me/avatar`.
+    BatchInvitationItem:
+      type: object
+      properties:
+        partner_id:
+          type: string
+          description: The partner this invitation belongs to.
+          format: uuid
+        invitation_id:
+          type: string
+          description: Invitation primary key.
+          format: uuid
+        invited_email:
+          type: string
+          description: Email the invitation was sent to.
+        invited_name:
+          type: string
+          description: Display name of the invited contact.
+        status:
+          type: string
+          description: Lifecycle status (pending, accepted, expired, revoked).
+        created_at:
+          type: string
+          description: When the invitation was created.
+          format: date-time
+        expires_at:
+          type: string
+          description: When the invitation expires.
+          format: date-time
+      description: A single invitation item in the batch response.
+    BatchInvitationStatusRequest:
+      type: object
+      properties:
+        partner_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: List of partner IDs to look up invitation status for.
+      description: Request body for the batch invitation status lookup.
+    BatchInvitationStatusResponse:
+      type: object
+      properties:
+        invitations:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchInvitationItem'
+          description: Invitation records, one per partner that has an invitation.
+      description: Response containing invitation status per partner.
     CertificationDto:
       type: object
       properties:
@@ -9406,6 +9481,45 @@ components:
           description: Row creation timestamp.
           format: date-time
       description: Response from invitation creation endpoints.
+    InvitationTokenLookupResponse:
+      type: object
+      properties:
+        invitation_id:
+          type: string
+          description: Invitation primary key.
+          format: uuid
+        partner_id:
+          type: string
+          description: Partner that issued the invitation.
+          format: uuid
+        invited_email:
+          type: string
+          description: Email the invitation was sent to.
+        invited_first_name:
+          type:
+          - 'null'
+          - string
+          description: Optional pre-filled first name.
+        invited_last_name:
+          type:
+          - 'null'
+          - string
+          description: Optional pre-filled last name.
+        role:
+          type:
+          - 'null'
+          - string
+          description: Role to assign upon acceptance.
+        status:
+          type: string
+          description: Lifecycle status (`pending`).
+        expires_at:
+          type: string
+          description: UTC expiration timestamp.
+          format: date-time
+      description: 'Public response for resolving an invitation by its token.
+
+        Used by the partner portal to pre-fill the registration form.'
     MyProfileResponse:
       type: object
       properties:

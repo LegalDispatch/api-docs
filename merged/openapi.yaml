@@ -1946,6 +1946,73 @@ paths:
     servers:
     - url: http://localhost:8090
       description: Local development
+    get:
+      tags:
+      - Partners (Admin)
+      summary: List partners
+      description: 'Returns a paginated list of partners with optional status filtering,
+        search, and invitation enrichment.
+
+        When `include=invitation` is set, each partner object includes an `invitation`
+        field (null if no invitation exists).
+
+        Invitation data is fetched best-effort from UAS — if UAS is unreachable, partners
+        are returned with `invitation: null`.
+
+        '
+      operationId: pms_listPartners
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - pending_setup
+          - active
+          - suspended
+          - deactivated
+        description: Filter by partner status
+      - name: search
+        in: query
+        schema:
+          type: string
+        description: Case-insensitive search on legal_name, primary_contact_name,
+          primary_contact_email
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+        description: Page number (1-based)
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+        description: Items per page (max 100)
+      - name: include
+        in: query
+        schema:
+          type: string
+        description: 'Comma-separated enrichments. Supported: invitation'
+      responses:
+        '200':
+          description: Paginated partner list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPartnersResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags:
       - Partners (Admin)
@@ -7510,6 +7577,125 @@ components:
         zip:
           type: string
           example: '90001'
+    InvitationStatus:
+      type: object
+      description: Invitation data for a partner, sourced from UAS.
+      required:
+      - invitation_id
+      - invited_email
+      - invited_name
+      - status
+      - created_at
+      - expires_at
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        invited_email:
+          type: string
+          format: email
+        invited_name:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - expired
+          - revoked
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    PartnerListItem:
+      type: object
+      description: Partner summary for list view. The invitation field is only present
+        when include=invitation is requested.
+      required:
+      - id
+      - legal_name
+      - partner_type
+      - status
+      - subscription_plan
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        legal_name:
+          type: string
+        trade_name:
+          type: string
+        partner_type:
+          type: string
+          enum:
+          - law_firm
+          - process_server_company
+          - court_filing_company
+          - hybrid
+        status:
+          type: string
+          enum:
+          - pending_setup
+          - active
+          - suspended
+          - deactivated
+        subscription_plan:
+          type: string
+          enum:
+          - starter
+          - professional
+          - enterprise
+        primary_contact_name:
+          type: string
+        primary_contact_email:
+          type: string
+          format: email
+        primary_contact_phone:
+          type: string
+        timezone:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        invitation:
+          description: Present only when include=invitation is requested. Null if
+            no invitation exists for this partner.
+          oneOf:
+          - $ref: '#/components/schemas/InvitationStatus'
+          - type: 'null'
+    ListPartnersResponse:
+      type: object
+      description: Paginated list of partners with optional invitation enrichment.
+      required:
+      - partners
+      - page
+      - per_page
+      - total
+      - total_pages
+      properties:
+        partners:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerListItem'
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 42
+        total_pages:
+          type: integer
+          example: 3
     AcceptTransferRequest:
       type: object
       properties:

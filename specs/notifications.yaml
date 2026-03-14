@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Notification Service API
-  version: "1.0"
+  version: '1.0'
   description: |
     Centralized email delivery engine for the LegalDispatch platform.
 
@@ -12,17 +12,10 @@ info:
     The full internal API reference (including `/internal/*` and `/webhooks/*`
     endpoints) is available via Scalar at the service's `/docs` route
     in development and staging environments.
-
 servers:
   - url: http://localhost:8088
     description: Local development
-
-# ════════════════════════════════════════════════════════════════════════
-# No public paths — this service is entirely internal.
-# This spec exists as a registry entry in the unified docs pipeline.
-# ════════════════════════════════════════════════════════════════════════
 paths: {}
-
 components:
   schemas:
     ErrorResponse:
@@ -30,7 +23,10 @@ components:
       description: |
         Standard error envelope returned by all error responses.
         Matches the platform-wide flat error shape.
-      required: [code, message, request_id]
+      required:
+        - code
+        - message
+        - request_id
       properties:
         code:
           type: string

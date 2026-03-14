@@ -1151,6 +1151,13 @@
                 "$ref": "#/components/schemas/DeviceInfoDto"
               }
             ]
+          },
+          "client_type": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Identifies the portal making the login request (e.g., `admin_portal`, `partner_portal`).\nWhen set, the service validates that the user's role is allowed for the specified portal.\nOptional — omit for API or non-portal logins."
           }
         },
         "description": "Request body for `POST /api/v1/auth/login`.\nAuthenticates with email and password, optionally scoped to a partner."

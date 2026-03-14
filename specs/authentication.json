@@ -990,9 +990,51 @@
           "message": {
             "type": "string",
             "description": "Human-readable confirmation message."
+          },
+          "access_token": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "JWT access token (present when auto-login succeeds)."
+          },
+          "refresh_token": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Opaque refresh token (present when auto-login succeeds)."
+          },
+          "token_type": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Always `Bearer` when tokens are present."
+          },
+          "expires_in": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Access token TTL in seconds (present when auto-login succeeds).",
+            "format": "int32"
+          },
+          "user": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Basic user info for UI display (present when auto-login succeeds).",
+                "$ref": "#/components/schemas/UserInfoDto"
+              }
+            ]
           }
         },
-        "description": "Response for `POST /api/v1/auth/password/forced-change`.\nConfirms the password was changed and the forced-change flag was cleared."
+        "description": "Response for `POST /api/v1/auth/password/forced-change`.\nConfirms the password was changed and the forced-change flag was cleared.\nIncludes login tokens so the user is automatically signed in."
       },
       "InternalChangePasswordRequest": {
         "type": "object",

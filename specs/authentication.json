@@ -320,6 +320,44 @@
         }
       }
     },
+    "/api/v1/auth/password/forced-change": {
+      "post": {
+        "tags": [
+          "Password"
+        ],
+        "summary": "Change password using a purpose-scoped token from a must_change_password login failure",
+        "description": "Accepts a purpose-scoped JWT (10-minute TTL, `purpose=forced_password_change`) that was\nissued in the `details.password_change_token` field of a `MUST_CHANGE_PASSWORD` error during login.\n\nThe user already proved their identity during the login attempt (password verified at step 3\nbefore the `must_change_password` gate at step 5c). The token carries that proof forward.\nCurrent password is still required as defense in depth.\n\n**Token validation:**\n- RS256 signature check\n- Expiry check (10-minute TTL)\n- `purpose=forced_password_change` claim check\n- Credential ID extracted from token claims\n\n**Side effects:**\n- Password hash updated with Argon2id\n- Password added to history (last 5 hashes)\n- `must_change_password` flag cleared to `false`\n- `PasswordChanged` event published\n\n**Password policy:** Minimum 12 chars, uppercase, lowercase, digit, special character,\nno email username, no reuse of last 5 passwords.\n\n**Error codes:**\n- `INVALID_TOKEN_FORMAT` — token invalid, expired, or wrong purpose\n- `INVALID_CREDENTIALS` — credential not found, flag not set, or wrong password\n- `PASSWORD_TOO_WEAK` — new password doesn't meet policy\n- `PASSWORD_BREACHED` — new password found in breach database",
+        "operationId": "auth_ForcedChangePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForcedChangePasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForcedChangePasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/api/v1/auth/sessions": {
       "get": {
         "tags": [
@@ -923,6 +961,38 @@
             "description": "Optional validation error details"
           }
         }
+      },
+      "ForcedChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Purpose-scoped JWT from the `MUST_CHANGE_PASSWORD` error `details.password_change_token`."
+          },
+          "current_password": {
+            "type": "string",
+            "description": "Current password for additional verification (defense in depth)."
+          },
+          "new_password": {
+            "type": "string",
+            "description": "New password — must satisfy the platform password policy."
+          }
+        },
+        "description": "Request body for `POST /api/v1/auth/password/forced-change`.\nUses a purpose-scoped JWT (10-minute TTL, `purpose=forced_password_change`) issued during\nthe failed login attempt. The user already proved their identity during login — the token\ncarries that proof forward without exposing email or requiring a second unauthenticated lookup."
+      },
+      "ForcedChangePasswordResponse": {
+        "type": "object",
+        "properties": {
+          "password_changed": {
+            "type": "boolean",
+            "description": "Always `true` on success."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable confirmation message."
+          }
+        },
+        "description": "Response for `POST /api/v1/auth/password/forced-change`.\nConfirms the password was changed and the forced-change flag was cleared."
       },
       "InternalChangePasswordRequest": {
         "type": "object",

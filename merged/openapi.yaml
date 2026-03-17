@@ -9098,6 +9098,26 @@ components:
     RegisterResponse:
       type: object
       properties:
+        access_token:
+          type: string
+          description: JWT access token for immediate use.
+        refresh_token:
+          type: string
+          description: Opaque refresh token for obtaining new access tokens.
+        token_type:
+          type: string
+          description: Token type (always `Bearer`).
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds.
+        user:
+          $ref: '#/components/schemas/RegisterUserInfoDto'
+      description: Response from `POST /api/v1/accounts/register` after successful
+        registration. Includes tokens so the frontend can proceed without a separate
+        login call.
+    RegisterUserInfoDto:
+      type: object
+      properties:
         user_id:
           type: string
           description: Newly created user primary key.
@@ -9111,33 +9131,21 @@ components:
         last_name:
           type: string
           description: User's family name.
+        role:
+          type: string
+          description: Role assigned from the invitation.
         partner_id:
           type:
           - 'null'
           - string
           description: Partner the user was invited to join.
           format: uuid
-        client_id:
+        partner_name:
           type:
           - 'null'
           - string
-          description: Client ID if the user is a `client_user`; null otherwise.
-          format: uuid
-        role:
-          type: string
-          description: Role assigned from the invitation.
-        status:
-          type: string
-          description: Initial account status (typically `pending_verification`).
-        email_verified:
-          type: boolean
-          description: Whether the user's email has been verified.
-        created_at:
-          type: string
-          description: Row creation timestamp.
-          format: date-time
-      description: Response from `POST /api/v1/accounts/register` after successful
-        registration.
+          description: Name of the partner organization.
+      description: User information nested inside the registration response.
     RegisterServerRequest:
       type: object
       properties:

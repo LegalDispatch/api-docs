@@ -1191,6 +1191,95 @@
         },
         "description": "Response for `POST /internal/credentials/invalidate-partner`.\nReturns counts of affected entities."
       },
+      "IssueRegistrationTokensRequest": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "Newly created user ID from the User Account Service (UUID string)."
+          },
+          "email": {
+            "type": "string",
+            "description": "User's email address."
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name (for display in JWT claims)."
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name (for display in JWT claims)."
+          },
+          "role": {
+            "type": "string",
+            "description": "Assigned role from the invitation (e.g., `partner_admin`, `dispatcher`)."
+          },
+          "partner_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner the user was invited to (UUID string); null for `process_server`/`super_admin`."
+          },
+          "partner_name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Human-readable partner display name; may be null."
+          },
+          "client_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Client ID if the user is a `client_user` (UUID string); null otherwise."
+          },
+          "ip_address": {
+            "type": "string",
+            "description": "Client IP address for session tracking."
+          },
+          "user_agent": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Client user-agent string for session tracking."
+          }
+        },
+        "description": "Request body for `POST /internal/credentials/issue-registration-tokens`.\nCalled by the User Account Service after user creation to issue tokens\nso the user can proceed to onboarding without a separate login call."
+      },
+      "IssueRegistrationTokensResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT access token (RS256 signed)."
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Opaque refresh token."
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Always `Bearer`."
+          },
+          "expires_in": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Access token TTL in seconds.",
+            "format": "int32"
+          },
+          "user": {
+            "description": "Basic user info for UI display.",
+            "$ref": "#/components/schemas/RegistrationUserInfoDto"
+          }
+        },
+        "description": "Response for `POST /internal/credentials/issue-registration-tokens`.\nMatches the `LoginResponse` shape (step = \"complete\") for frontend consistency."
+      },
       "JsonWebKeyDto": {
         "type": "object",
         "properties": {
@@ -1464,6 +1553,46 @@
           }
         },
         "description": "Response for `POST /api/v1/auth/refresh`.\nContains the rotated token pair — the old refresh token is immediately revoked."
+      },
+      "RegistrationUserInfoDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "User identifier (UUID)."
+          },
+          "email": {
+            "type": "string",
+            "description": "Login email address."
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name."
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name."
+          },
+          "role": {
+            "type": "string",
+            "description": "User's role."
+          },
+          "partner_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner identifier; null for roles without a partner scope."
+          },
+          "partner_name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Human-readable partner name."
+          }
+        },
+        "description": "User info returned in the registration token issuance response.\nMatches the `UserInfoDto` shape from the login response."
       },
       "ResetDto": {
         "type": "object",

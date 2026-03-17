@@ -15,9 +15,7 @@
   "paths": {
     "/api/v1/accounts/register": {
       "post": {
-        "tags": [
-          "Registration"
-        ],
+        "tags": ["Registration"],
         "summary": "Register via invitation",
         "description": "Completes an invitation-based registration by creating the user account, credentials in the Auth Service, and an email verification token. The invitation token is consumed and cannot be reused.",
         "operationId": "uas_Register",
@@ -65,9 +63,7 @@
     },
     "/api/v1/accounts/register/server": {
       "post": {
-        "tags": [
-          "Registration"
-        ],
+        "tags": ["Registration"],
         "summary": "Register as process server",
         "description": "Self-registration for independent process servers. No invitation required. Creates a user account with `role = process_server`, an empty server profile, and sends an email verification link.",
         "operationId": "uas_RegisterServer",
@@ -103,9 +99,7 @@
     },
     "/api/v1/accounts/verify-email": {
       "post": {
-        "tags": [
-          "Registration"
-        ],
+        "tags": ["Registration"],
         "summary": "Verify email address",
         "description": "Verifies a user's email using the one-time token sent to their inbox. Transitions the user status from `pending_verification` to `active`.",
         "operationId": "uas_VerifyEmail",
@@ -141,9 +135,7 @@
     },
     "/api/v1/invitations": {
       "post": {
-        "tags": [
-          "Invitations"
-        ],
+        "tags": ["Invitations"],
         "summary": "Invite operations user",
         "description": "Invites a new operations staff member to the caller's partner organization. Validates the role, checks seat limits, and ensures no duplicate pending invitation exists. For `client_user` role, a valid `client_id` must be provided.",
         "operationId": "uas_CreateInvitation",
@@ -186,9 +178,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Invitations"
-        ],
+        "tags": ["Invitations"],
         "summary": "List partner invitations",
         "description": "Returns all invitations for the caller's partner, optionally filtered by `status` (`pending`, `accepted`, `expired`, `revoked`). Includes the inviter's display name for each invitation.",
         "operationId": "uas_ListInvitations",
@@ -220,9 +210,7 @@
     },
     "/api/v1/invitations/server": {
       "post": {
-        "tags": [
-          "Invitations"
-        ],
+        "tags": ["Invitations"],
         "summary": "Invite process server",
         "description": "Invites an independent process server to join the caller's partner network. Checks for existing active relationships and duplicate pending invitations.",
         "operationId": "uas_CreateServerInvitation",
@@ -261,9 +249,7 @@
     },
     "/api/v1/invitations/{id}": {
       "delete": {
-        "tags": [
-          "Invitations"
-        ],
+        "tags": ["Invitations"],
         "summary": "Revoke pending invitation",
         "description": "Revokes a pending invitation, preventing the recipient from registering. Only pending invitations belonging to the caller's partner can be revoked.",
         "operationId": "uas_RevokeInvitation",
@@ -300,9 +286,7 @@
     },
     "/api/v1/invitations/{id}/resend": {
       "post": {
-        "tags": [
-          "Invitations"
-        ],
+        "tags": ["Invitations"],
         "summary": "Resend invitation email",
         "description": "Resends the invitation email for a pending invitation. Expired or already-accepted invitations cannot be resent.",
         "operationId": "uas_ResendInvitation",
@@ -342,9 +326,7 @@
     },
     "/api/v1/users": {
       "get": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "List partner users",
         "description": "Returns a paginated list of all users belonging to the caller's partner organization. Supports optional filtering by `role`, `status`, and free-text `search` (matches name or email). Default page size is 20; maximum is 100.",
         "operationId": "uas_ListUsers",
@@ -375,10 +357,7 @@
             "in": "query",
             "schema": {
               "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": ["integer", "string"],
               "format": "int32"
             }
           },
@@ -387,10 +366,7 @@
             "in": "query",
             "schema": {
               "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": ["integer", "string"],
               "format": "int32"
             }
           }
@@ -414,9 +390,7 @@
     },
     "/api/v1/users/{id}": {
       "get": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Get user details",
         "description": "Returns the full profile of a specific user within the caller's partner organization. Returns 404 if the user does not exist or belongs to a different partner.",
         "operationId": "uas_GetUser",
@@ -453,9 +427,7 @@
     },
     "/api/v1/users/{id}/role": {
       "put": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Change user role",
         "description": "Changes the role of a user within the caller's partner organization. **Required Role:** `partner_admin` only. Guards: cannot change your own role; cannot remove the last `partner_admin`.",
         "operationId": "uas_ChangeUserRole",
@@ -508,9 +480,7 @@
     },
     "/api/v1/users/{id}/deactivate": {
       "post": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Deactivate user",
         "description": "Deactivates a user account (soft delete). The user loses access immediately and all active sessions are invalidated. Data and order history are retained for audit. **Required Role:** `partner_admin` only.",
         "operationId": "uas_DeactivateUser",
@@ -563,9 +533,7 @@
     },
     "/api/v1/users/{id}/reactivate": {
       "post": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Reactivate user",
         "description": "Reactivates a previously deactivated or suspended user account. Checks that reactivation would not exceed the partner's seat limit. **Required Role:** `partner_admin` only.",
         "operationId": "uas_ReactivateUser",
@@ -608,9 +576,7 @@
     },
     "/api/v1/users/me": {
       "get": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Get current user profile",
         "description": "Returns the full profile of the currently authenticated user, including partner name, notification preferences, and account status. Any authenticated user can call this endpoint.",
         "operationId": "uas_GetMyProfile",
@@ -631,9 +597,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Update current user profile",
         "description": "Updates the authenticated user's profile. Only provided (non-null) fields are changed. Updatable fields: `first_name`, `last_name`, `phone`, and `notification_preferences`. Email and role cannot be changed through this endpoint.",
         "operationId": "uas_UpdateMyProfile",
@@ -669,9 +633,7 @@
     },
     "/api/v1/users/me/avatar": {
       "post": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Upload user avatar",
         "description": "Upload a new avatar image for the current user. **Content-Type:** `multipart/form-data` with a `file` field. Accepted formats: JPEG, PNG, WebP. Maximum size: 5 MB.",
         "operationId": "uas_UploadAvatar",
@@ -697,9 +659,7 @@
     },
     "/api/v1/users/me/change-password": {
       "post": {
-        "tags": [
-          "Users"
-        ],
+        "tags": ["Users"],
         "summary": "Change own password",
         "description": "Changes the authenticated user's password. Requires current password confirmation. The password change is delegated to the Auth Service, which verifies the current password before applying the update.",
         "operationId": "uas_ChangePassword",
@@ -735,9 +695,7 @@
     },
     "/api/v1/users/me/server-profile": {
       "get": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "Get current server profile",
         "description": "Returns the authenticated process server's public marketplace profile, including certifications, service areas, work preferences, and aggregate stats. Only accessible to users with the `process_server` role.",
         "operationId": "uas_GetMyServerProfile",
@@ -764,9 +722,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "Update current server profile",
         "description": "Updates the authenticated process server's marketplace profile. Only provided (non-null) fields are applied. Updatable fields: `display_name`, `bio`, `base_rate`, `availability_status`, and `work_preferences`.",
         "operationId": "uas_UpdateMyServerProfile",
@@ -808,9 +764,7 @@
     },
     "/api/v1/users/me/server-profile/service-areas": {
       "put": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "Update service coverage areas",
         "description": "Replaces all service coverage areas for the authenticated process server. Existing areas are deactivated and new areas are inserted atomically in a single transaction. Supported area types: `state`, `county`, `city`, `zip`, `radius`.",
         "operationId": "uas_UpdateMyServiceAreas",
@@ -852,9 +806,7 @@
     },
     "/api/v1/users/me/partner-relationships": {
       "get": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "List partner relationships",
         "description": "Returns all partner relationships for the authenticated process server, including pending invitations, active partnerships, and terminated relationships. Partner names are resolved from the Partner Management Service.",
         "operationId": "uas_GetMyPartnerRelationships",
@@ -880,9 +832,7 @@
     },
     "/api/v1/users/me/partner-relationships/{relationshipId}/accept": {
       "post": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "Accept a partner invitation",
         "description": "Accepts a pending partner relationship invitation. Sets the agreed rate and activates the relationship, enabling the server to receive assignments from this partner. The relationship must be in `pending` status.",
         "operationId": "uas_AcceptPartnerRelationship",
@@ -935,9 +885,7 @@
     },
     "/api/v1/users/me/partner-relationships/{relationshipId}/decline": {
       "post": {
-        "tags": [
-          "Server Profiles"
-        ],
+        "tags": ["Server Profiles"],
         "summary": "Decline a partner invitation",
         "description": "Declines a pending partner relationship invitation. Sets the relationship status to `declined`. The relationship must be in `pending` status.",
         "operationId": "uas_DeclinePartnerRelationship",
@@ -983,18 +931,12 @@
         "properties": {
           "agreed_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": ["number", "string"],
             "description": "Agreed-upon rate in USD per serve for this relationship.",
             "format": "double"
           },
           "coverage_areas_for_partner": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "type": "string"
             },
@@ -1021,24 +963,15 @@
             "description": "Type of certification (e.g., `registered_process_server`, `notary`)."
           },
           "state": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Two-letter US state code where the certification was issued."
           },
           "number": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Certification or license number assigned by the issuing authority."
           },
           "expires_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Expiration date; null if the certification does not expire."
           }
         },
@@ -1156,31 +1089,19 @@
             "description": "Role to assign upon acceptance (e.g., `dispatcher`, `billing`)."
           },
           "first_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional pre-filled first name for the invitee."
           },
           "last_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional pre-filled last name for the invitee."
           },
           "message": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional personal message included in the invitation email."
           },
           "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client ID to scope the invited user to a specific client organization.\nRequired when string CreateInvitationRequest.Role is `client_user`.",
             "format": "uuid"
           }
@@ -1195,27 +1116,17 @@
             "description": "Process server's email address."
           },
           "message": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional personal message included in the invitation email."
           },
           "proposed_base_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Proposed pay rate in USD per serve.",
             "format": "double"
           },
           "proposed_coverage_areas": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "type": "string"
             },
@@ -1232,10 +1143,7 @@
             "description": "Reason for deactivation (stored in the audit trail)."
           },
           "reassign_open_orders_to": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional user ID to reassign open orders to.",
             "format": "uuid"
           }
@@ -1267,11 +1175,7 @@
         "description": "Response from `POST /api/v1/users/:id/deactivate`."
       },
       "ErrorResponse": {
-        "required": [
-          "code",
-          "message",
-          "request_id"
-        ],
+        "required": ["code", "message", "request_id"],
         "type": "object",
         "properties": {
           "code": {
@@ -1302,18 +1206,12 @@
             "format": "uuid"
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner this account belongs to.",
             "format": "uuid"
           },
           "partner_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner display name (enriched from cache or PMS)."
           },
           "role": {
@@ -1352,18 +1250,12 @@
             "description": "User role."
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner scope; null for process servers.",
             "format": "uuid"
           },
           "partner_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Human-readable partner display name; null when Guid? InternalAuthContextResponse.PartnerId is null."
           },
           "status": {
@@ -1371,28 +1263,19 @@
             "description": "Account lifecycle status."
           },
           "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client organization ID; present only for `client_user` role.",
             "format": "uuid"
           },
           "permissions": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "type": "string"
             },
             "description": "Permission set for operations users / super admins.\nNull for process servers (they use IReadOnlyList&lt;InternalPartnerRelationshipSummary&gt;? InternalAuthContextResponse.PartnerRelationships instead)."
           },
           "partner_relationships": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "$ref": "#/components/schemas/InternalPartnerRelationshipSummary"
             },
@@ -1415,11 +1298,7 @@
           },
           "average_rating": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Aggregate rating (0.0–5.0).",
             "format": "double"
           },
@@ -1429,29 +1308,18 @@
           },
           "home_base_lat": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Home base latitude (WGS 84).",
             "format": "double"
           },
           "home_base_lng": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Home base longitude (WGS 84).",
             "format": "double"
           },
           "coverage_match": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Best coverage area match type."
           },
           "relationship_id": {
@@ -1461,11 +1329,7 @@
           },
           "agreed_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Agreed rate in USD per serve for this relationship.",
             "format": "double"
           }
@@ -1493,10 +1357,7 @@
             "description": "Certification type (e.g., `registered_process_server`)."
           },
           "state": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Issuing state code."
           },
           "active": {
@@ -1519,10 +1380,7 @@
             "description": "Login email address."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Phone number (E.164 format); null if not set."
           },
           "full_name": {
@@ -1551,10 +1409,7 @@
             ]
           },
           "accounts": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "$ref": "#/components/schemas/InternalAccountSummary"
             },
@@ -1616,28 +1471,19 @@
           },
           "active_users": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Number of active (non-deactivated) users.",
             "format": "int32"
           },
           "pending_invitations": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Number of pending invitations.",
             "format": "int32"
           },
           "total_seats_in_use": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Sum of active users and pending invitations.",
             "format": "int32"
           }
@@ -1658,11 +1504,7 @@
           },
           "average_rating": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Aggregate rating (0.0–5.0).",
             "format": "double"
           },
@@ -1672,11 +1514,7 @@
           },
           "response_time_avg_minutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Average response time in minutes.",
             "format": "int32"
           },
@@ -1688,29 +1526,18 @@
             "description": "Geographic coverage areas."
           },
           "home_base_zip": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Home base ZIP code."
           },
           "home_base_lat": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Home base latitude (WGS 84) — internal only.",
             "format": "double"
           },
           "home_base_lng": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Home base longitude (WGS 84) — internal only.",
             "format": "double"
           },
@@ -1732,34 +1559,21 @@
             "description": "Type of geographic boundary (`state`, `county`, `city`, `zip`, `radius`)."
           },
           "value": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Area identifier value."
           },
           "state": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Two-letter US state code."
           },
           "radius_miles": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Radius in miles (only for `radius` area type).",
             "format": "int32"
           },
           "center_zip": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Center ZIP code (only for `radius` area type)."
           }
         },
@@ -1786,10 +1600,7 @@
             "description": "User role."
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner scope; null for globally-scoped roles.",
             "format": "uuid"
           },
@@ -1821,10 +1632,7 @@
             "description": "Login email address."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Phone number in E.164 format."
           },
           "role": {
@@ -1832,10 +1640,7 @@
             "description": "Role constant (e.g., `dispatcher`, `process_server`)."
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner this user belongs to; null for process servers and super admins.",
             "format": "uuid"
           },
@@ -1878,10 +1683,7 @@
             "description": "Recipient's email address."
           },
           "role": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Role to assign upon acceptance; null for server invitations."
           },
           "invitation_type": {
@@ -1893,10 +1695,7 @@
             "description": "Lifecycle status."
           },
           "invited_by_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Display name of the user who created the invitation."
           },
           "expires_at": {
@@ -1942,10 +1741,7 @@
             "description": "Recipient's email address."
           },
           "role": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Role to assign upon acceptance; null for server invitations."
           },
           "invitation_type": {
@@ -1958,10 +1754,7 @@
             "format": "uuid"
           },
           "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client organization scope; null unless `client_user`.",
             "format": "uuid"
           },
@@ -2008,17 +1801,11 @@
             "description": "Login email address."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional phone number in E.164 format."
           },
           "avatar_url": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "CDN URL for the user's avatar image."
           },
           "role": {
@@ -2026,18 +1813,12 @@
             "description": "Role constant (e.g., `dispatcher`, `billing`)."
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner organization ID; null for globally-scoped roles.",
             "format": "uuid"
           },
           "partner_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner display name resolved from the Partner Management Service."
           },
           "status": {
@@ -2049,10 +1830,7 @@
             "description": "Whether the user has verified their email address."
           },
           "last_login_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "UTC timestamp of the most recent successful login.",
             "format": "date-time"
           },
@@ -2091,28 +1869,19 @@
         "properties": {
           "page": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Current page number (1-based).",
             "format": "int32"
           },
           "limit": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Results per page.",
             "format": "int32"
           },
           "total": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Total matching records across all pages.",
             "format": "int32"
           }
@@ -2208,17 +1977,11 @@
             "format": "date-time"
           },
           "ip_address": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client IP address."
           },
           "user_agent": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Browser/client user agent string."
           }
         },
@@ -2244,10 +2007,7 @@
             "description": "Plain-text password (hashed by the Auth Service)."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional mobile phone number."
           },
           "agreed_to_terms": {
@@ -2258,6 +2018,31 @@
         "description": "Request body for `POST /api/v1/accounts/register`.\nCompletes an invitation-based registration by creating the user account."
       },
       "RegisterResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT access token for immediate use."
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Opaque refresh token for obtaining new access tokens."
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Token type (always `Bearer`)."
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Access token lifetime in seconds."
+          },
+          "user": {
+            "$ref": "#/components/schemas/RegisterUserInfoDto"
+          }
+        },
+        "description": "Response from `POST /api/v1/accounts/register` after successful registration. Includes tokens so the frontend can proceed without a separate login call."
+      },
+      "RegisterUserInfoDto": {
         "type": "object",
         "properties": {
           "user_id": {
@@ -2277,41 +2062,21 @@
             "type": "string",
             "description": "User's family name."
           },
-          "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "Partner the user was invited to join.",
-            "format": "uuid"
-          },
-          "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "Client ID if the user is a `client_user`; null otherwise.",
-            "format": "uuid"
-          },
           "role": {
             "type": "string",
             "description": "Role assigned from the invitation."
           },
-          "status": {
-            "type": "string",
-            "description": "Initial account status (typically `pending_verification`)."
+          "partner_id": {
+            "type": ["null", "string"],
+            "description": "Partner the user was invited to join.",
+            "format": "uuid"
           },
-          "email_verified": {
-            "type": "boolean",
-            "description": "Whether the user's email has been verified."
-          },
-          "created_at": {
-            "type": "string",
-            "description": "Row creation timestamp.",
-            "format": "date-time"
+          "partner_name": {
+            "type": ["null", "string"],
+            "description": "Name of the partner organization."
           }
         },
-        "description": "Response from `POST /api/v1/accounts/register` after successful registration."
+        "description": "User information nested inside the registration response."
       },
       "RegisterServerRequest": {
         "type": "object",
@@ -2333,10 +2098,7 @@
             "description": "Plain-text password (hashed by the Auth Service)."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional mobile phone number."
           },
           "state": {
@@ -2401,19 +2163,12 @@
           },
           "agreed_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Agreed rate (present on acceptance).",
             "format": "double"
           },
           "activated_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "When the relationship was activated (present on acceptance).",
             "format": "date-time"
           }
@@ -2434,10 +2189,7 @@
             "format": "uuid"
           },
           "partner_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner display name (resolved from PMS)."
           },
           "status": {
@@ -2446,19 +2198,12 @@
           },
           "agreed_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Agreed pay rate in USD per serve (null for pending relationships).",
             "format": "double"
           },
           "coverage_areas": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "type": "string"
             },
@@ -2466,47 +2211,29 @@
           },
           "total_orders": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Total orders completed through this relationship.",
             "format": "int32"
           },
           "rating": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Partner-assigned performance rating (0.0–5.0 scale).",
             "format": "double"
           },
           "joined_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "When the relationship became active.",
             "format": "date-time"
           },
           "invitation_sent_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "When the invitation was sent (for pending relationships).",
             "format": "date-time"
           },
           "proposed_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Proposed rate from the inviting partner (for pending relationships).",
             "format": "double"
           }
@@ -2557,10 +2284,7 @@
             "description": "Public display name shown in marketplace listings."
           },
           "bio": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Free-text biography / service description."
           },
           "certifications": {
@@ -2579,11 +2303,7 @@
           },
           "base_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Default standard service rate in USD per serve.",
             "format": "double"
           },
@@ -2597,20 +2317,13 @@
           },
           "average_rating": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Aggregate rating across all partner relationships (0.0–5.0 scale).",
             "format": "double"
           },
           "total_orders_completed": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": ["integer", "string"],
             "description": "Total number of orders completed across all partners.",
             "format": "int32"
           },
@@ -2621,11 +2334,7 @@
           },
           "response_time_avg_minutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Average response time to new assignments in minutes.",
             "format": "int32"
           }
@@ -2640,34 +2349,21 @@
             "description": "Type of geographic boundary (`state`, `county`, `city`, `zip`, `radius`)."
           },
           "value": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Value identifying the area (e.g., county name, city name, ZIP code)."
           },
           "state": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Two-letter US state code for disambiguation."
           },
           "radius_miles": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Radius in miles (only for `radius` area type).",
             "format": "int32"
           },
           "center_zip": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Center ZIP code (only for `radius` area type)."
           }
         },
@@ -2681,34 +2377,21 @@
             "description": "Type of geographic boundary (`state`, `county`, `city`, `zip`, `radius`)."
           },
           "value": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Value identifying the area (e.g., county name, city name, ZIP code)."
           },
           "state": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Two-letter US state code for disambiguation."
           },
           "radius_miles": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
+            "type": ["null", "integer", "string"],
             "description": "Radius in miles (required for `radius` area type).",
             "format": "int32"
           },
           "center_zip": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Center ZIP code (required for `radius` area type)."
           }
         },
@@ -2732,24 +2415,15 @@
         "type": "object",
         "properties": {
           "first_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated first name; null to leave unchanged."
           },
           "last_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated last name; null to leave unchanged."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated phone number; null to leave unchanged."
           },
           "notification_preferences": {
@@ -2770,34 +2444,21 @@
         "type": "object",
         "properties": {
           "display_name": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated public display name; null to leave unchanged."
           },
           "bio": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated free-text biography; null to leave unchanged."
           },
           "base_rate": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "null",
-              "number",
-              "string"
-            ],
+            "type": ["null", "number", "string"],
             "description": "Updated base rate in USD; null to leave unchanged.",
             "format": "double"
           },
           "availability_status": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Updated availability status; null to leave unchanged."
           },
           "work_preferences": {
@@ -2861,17 +2522,11 @@
             "description": "User's family name."
           },
           "phone": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Optional phone number in E.164 format."
           },
           "avatar_url": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "CDN URL for the user's avatar image."
           },
           "role": {
@@ -2887,41 +2542,26 @@
             "description": "Whether the user has verified their email address."
           },
           "partner_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Partner organization ID.",
             "format": "uuid"
           },
           "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client organization ID; null unless role is `client_user`.",
             "format": "uuid"
           },
           "deactivated_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "UTC timestamp when the account was deactivated; null if active.",
             "format": "date-time"
           },
           "deactivated_reason": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Free-text reason recorded at deactivation time."
           },
           "last_login_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "UTC timestamp of the most recent successful login.",
             "format": "date-time"
           },
@@ -2979,18 +2619,12 @@
             "description": "Account lifecycle status (e.g., `active`, `deactivated`)."
           },
           "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "Client organization ID; null unless role is `client_user`.",
             "format": "uuid"
           },
           "last_login_at": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": ["null", "string"],
             "description": "UTC timestamp of the most recent successful login.",
             "format": "date-time"
           },
@@ -3060,10 +2694,7 @@
             "description": "Whether the server accepts weekend service requests."
           },
           "preferred_case_types": {
-            "type": [
-              "null",
-              "array"
-            ],
+            "type": ["null", "array"],
             "items": {
               "type": "string"
             },

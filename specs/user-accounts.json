@@ -19,7 +19,7 @@
           "Registration"
         ],
         "summary": "Register via invitation",
-        "description": "Completes an invitation-based registration by creating the user account, credentials in the Auth Service, and an email verification token. The invitation token is consumed and cannot be reused.",
+        "description": "Completes an invitation-based registration by creating the user account, credentials in the Auth Service, and an email verification token. Returns access and refresh tokens so the frontend can proceed to onboarding without a separate login call.",
         "operationId": "uas_Register",
         "requestBody": {
           "content": {
@@ -2413,58 +2413,33 @@
       "RegisterResponse": {
         "type": "object",
         "properties": {
-          "user_id": {
+          "access_token": {
             "type": "string",
-            "description": "Newly created user primary key.",
-            "format": "uuid"
+            "description": "JWT access token (RS256 signed, 15-min TTL)."
           },
-          "email": {
+          "refresh_token": {
             "type": "string",
-            "description": "Registered email address (from the invitation)."
+            "description": "Opaque refresh token (30-day absolute TTL)."
           },
-          "first_name": {
+          "token_type": {
             "type": "string",
-            "description": "User's given name."
+            "description": "Always `Bearer`."
           },
-          "last_name": {
-            "type": "string",
-            "description": "User's family name."
-          },
-          "partner_id": {
+          "expires_in": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
-              "null",
+              "integer",
               "string"
             ],
-            "description": "Partner the user was invited to join.",
-            "format": "uuid"
+            "description": "Access token TTL in seconds (900).",
+            "format": "int32"
           },
-          "client_id": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "Client ID if the user is a `client_user`; null otherwise.",
-            "format": "uuid"
-          },
-          "role": {
-            "type": "string",
-            "description": "Role assigned from the invitation."
-          },
-          "status": {
-            "type": "string",
-            "description": "Initial account status (typically `pending_verification`)."
-          },
-          "email_verified": {
-            "type": "boolean",
-            "description": "Whether the user's email has been verified."
-          },
-          "created_at": {
-            "type": "string",
-            "description": "Row creation timestamp.",
-            "format": "date-time"
+          "user": {
+            "description": "Basic user info for UI display.",
+            "$ref": "#/components/schemas/RegisterUserInfoDto"
           }
         },
-        "description": "Response from `POST /api/v1/accounts/register` after successful registration."
+        "description": "Response from `POST /api/v1/accounts/register` after successful registration.\nMatches the login response shape so the frontend can proceed to onboarding\nwithout a separate login call."
       },
       "RegisterServerRequest": {
         "type": "object",
@@ -2534,6 +2509,46 @@
           }
         },
         "description": "Response from `POST /api/v1/accounts/register/server`."
+      },
+      "RegisterUserInfoDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "User identifier (UUID)."
+          },
+          "email": {
+            "type": "string",
+            "description": "Login email address."
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name."
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name."
+          },
+          "role": {
+            "type": "string",
+            "description": "User's role."
+          },
+          "partner_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Partner identifier; null for roles without a partner scope."
+          },
+          "partner_name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Human-readable partner name."
+          }
+        },
+        "description": "User info returned in the registration response.\nMatches the `UserInfoDto` shape from the login response."
       },
       "RelationshipActionResponse": {
         "type": "object",
